@@ -28,5 +28,16 @@
                 type="application/octet-stream"
             />
         </item>
+        <item>
+    <title>Version 0.0.1</title>
+    <pubDate>Thu, 21 May 2026 11:37:00 +0000</pubDate>
+    <sparkle:version>2</sparkle:version>
+    <sparkle:shortVersionString>0.0.1</sparkle:shortVersionString>
+    <enclosure
+        url="https://github.com/Zahnweh/Jellyfish/releases/download/v0.0.1/Jellyfish-0.0.1.zip"
+        sparkle:edSignature=8oXUg7oeQSCjvxiJ5WZEqZncfJi9WFkL3lvsXez3SEniXfHYRua3UyTDZskKmHc7kCWnT5Pp8PSYOR2pvCYbDg== length=6067641
+        length="6067641"
+        type="application/octet-stream" />
+</item>
     </channel>
 </rss>
