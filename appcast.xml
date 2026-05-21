@@ -6,15 +6,27 @@
         <description>Jellyfish – Text Snippet Expander for macOS</description>
         <language>de</language>
         <item>
-    <title>Version 0.0.1</title>
-    <pubDate>Thu, 21 May 2026 09:01:22 +0000</pubDate>
-    <sparkle:version>1</sparkle:version>
-    <sparkle:shortVersionString>0.0.1</sparkle:shortVersionString>
-    <enclosure
-        url="https://github.com/Zahnweh/Jellyfish/releases/download/v0.0.1/Jellyfish-0.0.1.zip"
-        sparkle:edSignature=SNi2KkKbj3dfvJD9f+EbTLHJzSSIYWQZB2obzd/F/qZPpDgt8Hu+at6lQ0O7ipX/5Ggm5k4BKy45am8A0TSOBw== length=6057451
-        length="6057451"
-        type="application/octet-stream" />
-</item>
+            <title>Jellyfish 0.0.1</title>
+            <pubDate>Thu, 21 May 2026 13:00:00 +0200</pubDate>
+            <sparkle:version>1</sparkle:version>
+            <sparkle:shortVersionString>0.0.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <h3>Jellyfish 0.0.1</h3>
+                <p>Erste funktionierende Version.</p>
+                <ul>
+                    <li>Textexpansion via CGEventTap (macOS 15+ kompatibel)</li>
+                    <li>Berechtigungsdialoge für Bedienungshilfen und Eingabeüberwachung</li>
+                    <li>Snippets verwalten über das Statusleisten-Menü</li>
+                    <li>Automatische Updates via Sparkle</li>
+                </ul>
+            ]]></description>
+            <enclosure
+                url="https://github.com/Zahnweh/Jellyfish/releases/download/v0.0.1/Jellyfish-0.0.1.zip"
+                sparkle:edSignature="SztWFSNj9RTEnAdWIc8e+aABVFaoWcYqNK53RXz5ZhYUR+N2rOTzkEyzUWevjJ1wZq/hhjRAWByZmHvE+tUqBg=="
+                length="21391069"
+                type="application/octet-stream"
+            />
+        </item>
     </channel>
 </rss>
