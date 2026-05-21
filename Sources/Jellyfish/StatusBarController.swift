@@ -42,7 +42,7 @@ class StatusBarController {
 
         menu.addItem(.separator())
 
-        let updateItem = NSMenuItem(title: "Nach Updates suchen…", action: #selector(checkForUpdates), keyEquivalent: "")
+        let updateItem = NSMenuItem(title: "Releases auf GitHub…", action: #selector(openReleases), keyEquivalent: "")
         updateItem.target = self
         menu.addItem(updateItem)
 
@@ -86,5 +86,7 @@ class StatusBarController {
     @objc private func openApp() { SnippetEditorWindowController.shared.showManageMode() }
     @objc private func addSnippet() { SnippetEditorWindowController.shared.showAddMode() }
     @objc private func manageSnippets() { SnippetEditorWindowController.shared.showManageMode() }
-    @objc private func checkForUpdates() { AppDelegate.shared?.checkForUpdates() }
+    @objc private func openReleases() {
+        NSWorkspace.shared.open(URL(string: "https://github.com/Zahnweh/Jellyfish/releases")!)
+    }
 }

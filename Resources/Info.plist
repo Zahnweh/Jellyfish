@@ -28,11 +28,5 @@
     <string>Jellyfish benötigt Bedienungshilfen-Zugriff, um Textkürzel zu erkennen und automatisch zu expandieren.</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
-    <key>SUPublicEDKey</key>
-    <string>dJvJ5EPA/VKtv0fp5FnnQ0huP8Zxj1cVLXnTg0VmrZ4=</string>
-    <key>SUFeedURL</key>
-    <string>https://raw.githubusercontent.com/Zahnweh/Jellyfish/main/appcast.xml</string>
-    <key>SUEnableAutomaticChecks</key>
-    <true/>
 </dict>
 </plist>

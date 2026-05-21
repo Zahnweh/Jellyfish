@@ -4,15 +4,11 @@ import PackageDescription
 let package = Package(
     name: "Jellyfish",
     platforms: [.macOS(.v13)],
-    dependencies: [
-        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.0.0"),
-    ],
+    dependencies: [],
     targets: [
         .executableTarget(
             name: "Jellyfish",
-            dependencies: [
-                .product(name: "Sparkle", package: "Sparkle"),
-            ],
+            dependencies: [],
             path: "Sources/Jellyfish",
             resources: [
                 .process("snippets.json"),

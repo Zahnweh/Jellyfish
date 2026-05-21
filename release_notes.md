@@ -1,13 +1,20 @@
-## Neu in 0.0.2
+## Neu in 0.0.3
+
+### Verteilung als DMG
+Jellyfish wird jetzt als DMG ausgeliefert. Einmalig öffnen, in den Applications-Ordner ziehen, fertig – keine Quarantine-Probleme mehr. Auto-Updates entfallen; neue Versionen über „Releases auf GitHub…" im Statusleisten-Menü verfügbar.
+
+---
+
+## Änderungen seit 0.0.1
 
 ### Ordner
-Textbausteine lassen sich jetzt in Ordner organisieren. Ordner können über das `+`/`−`-Menü im linken Panel angelegt, umbenannt und gelöscht werden. Snippets können per Drag & Drop in Ordner verschoben werden.
+Textbausteine lassen sich in Ordner organisieren, umbenennen und per Drag & Drop verschieben.
 
 ### Datum-Platzhalter
-Zeitstempel werden direkt im Textbaustein kodiert und beim Einfügen automatisch aufgelöst – z. B. `{TT.MM.JJJJ}`, `{HH:MM}`, `{HH:MM:SS}`. Über den **Zeitstempel**-Button im Editor lassen sich alle Formate bequem einfügen.
+`{TT.MM.JJJJ}`, `{HH:MM}`, `{HH:MM:SS}` u. a. werden beim Einfügen automatisch aufgelöst. Über den **Zeitstempel**-Button im Editor einfügen.
 
 ### Dropdown-Platzhalter
-Mit `{AUSWAHL:Option1|Option2|Option3}` lassen sich Auswahlmöglichkeiten direkt im Textbaustein definieren. Beim Auslösen des Kürzels erscheint ein schwebendes Auswahlfenster mit Live-Vorschau – der aktuell gewählte Wert wird farblich hervorgehoben. Optionen können im Editor über den **Dropdown**-Button mit `+`/`−` verwaltet werden.
+`{AUSWAHL:Option1|Option2|Option3}` zeigt beim Auslösen ein schwebendes Auswahlfenster mit Live-Vorschau. Optionen im Editor über den **Dropdown**-Button mit `+`/`−` verwalten.
 
 ### Bugfix: Überlappende Kürzel
-Wenn ein Kürzel auf ein anderes endet (z. B. `an#` und `ian#`), gewinnt jetzt immer das längste Kürzel.
+Bei überlappenden Kürzeln gewinnt jetzt immer das längste.

@@ -14,9 +14,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Xcode Command Line Tools
-        run: xcode-select --install 2>/dev/null || true
-
       - name: Version aus Tag
         id: version
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
@@ -25,9 +22,7 @@ jobs:
         run: swift package resolve
 
       - name: Release Build
-        run: |
-          swift build -c release \
-            -Xlinker -rpath -Xlinker "@executable_path/../Frameworks"
+        run: swift build -c release
 
       - name: App Bundle erstellen
         run: |
@@ -37,17 +32,14 @@ jobs:
           BUILD_DIR=.build/${ARCH}-apple-macosx/release
 
           rm -rf "$APP"
-          mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources" "$CONTENTS/Frameworks"
+          mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources"
 
           cp "$BUILD_DIR/Jellyfish" "$CONTENTS/MacOS/Jellyfish"
-
-          SPARKLE_FW=$(find .build/artifacts -name "Sparkle.framework" -type d | head -1)
-          [ -n "$SPARKLE_FW" ] && cp -R "$SPARKLE_FW" "$CONTENTS/Frameworks/"
 
           [ -d "$BUILD_DIR/Jellyfish_Jellyfish.bundle" ] && \
             cp -R "$BUILD_DIR/Jellyfish_Jellyfish.bundle" "$CONTENTS/Resources/"
 
-          cp Resources/AppIcon.icns "$CONTENTS/Resources/"
+          cp Resources/*.icns "$CONTENTS/Resources/"
 
           sed \
             -e "s/\$(APP_VERSION)/${{ steps.version.outputs.VERSION }}/g" \
@@ -56,59 +48,21 @@ jobs:
 
           codesign --force --deep --sign - "$APP"
 
-      - name: ZIP erstellen
-        run: |
-          cd build
-          zip -r "Jellyfish-${{ steps.version.outputs.VERSION }}.zip" Jellyfish.app
-
-      - name: Sparkle Tools herunterladen
-        run: |
-          curl -L https://github.com/sparkle-project/Sparkle/releases/download/2.9.2/Sparkle-2.9.2.tar.xz \
-               -o /tmp/sparkle.tar.xz
-          mkdir -p /tmp/sparkle && tar -xf /tmp/sparkle.tar.xz -C /tmp/sparkle
-
-      - name: Update signieren
-        id: sign
-        env:
-          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
-        run: |
-          ZIP="build/Jellyfish-${{ steps.version.outputs.VERSION }}.zip"
-          SIG=$(echo "$SPARKLE_PRIVATE_KEY" | /tmp/sparkle/bin/sign_update --ed-key-file - "$ZIP")
-          echo "SIGNATURE=$SIG" >> $GITHUB_OUTPUT
-          echo "LENGTH=$(wc -c < $ZIP | tr -d ' ')" >> $GITHUB_OUTPUT
-
-      - name: Appcast aktualisieren
+      - name: DMG erstellen
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
-          DATE=$(date -u "+%a, %d %b %Y %H:%M:%S +0000")
-          BUILD="${{ github.run_number }}"
-          SIG="${{ steps.sign.outputs.SIGNATURE }}"
-          LEN="${{ steps.sign.outputs.LENGTH }}"
-          URL="https://github.com/Zahnweh/Jellyfish/releases/download/v${VERSION}/Jellyfish-${VERSION}.zip"
+          MOUNT=$(mktemp -d)
 
-          ITEM="        <item>
-              <title>Jellyfish ${VERSION}</title>
-              <pubDate>${DATE}</pubDate>
-              <sparkle:version>${BUILD}</sparkle:version>
-              <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
-              <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-              <enclosure
-                  url=\"${URL}\"
-                  ${SIG}
-                  length=\"${LEN}\"
-                  type=\"application/octet-stream\" />
-          </item>"
+          hdiutil create -size 100m -volname "Jellyfish" -fs HFS+ -o build/Jellyfish_rw.dmg
+          hdiutil attach -readwrite -noverify -noautoopen -mountpoint "$MOUNT" build/Jellyfish_rw.dmg
 
-          # Füge Item vor </channel> ein
-          python3 - <<EOF
-          import re, sys
-          with open('appcast.xml', 'r') as f:
-              content = f.read()
-          item = """${ITEM}"""
-          content = content.replace('    </channel>', item + '\n    </channel>')
-          with open('appcast.xml', 'w') as f:
-              f.write(content)
-          EOF
+          ditto build/Jellyfish.app "$MOUNT/Jellyfish.app"
+          ln -s /Applications "$MOUNT/Applications"
+
+          hdiutil detach "$MOUNT"
+          rmdir "$MOUNT"
+          hdiutil convert build/Jellyfish_rw.dmg -format UDZO -o "build/Jellyfish-${VERSION}.dmg"
+          rm -f build/Jellyfish_rw.dmg
 
       - name: GitHub Release erstellen
         uses: softprops/action-gh-release@v2
@@ -116,14 +70,4 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: "Jellyfish ${{ steps.version.outputs.VERSION }}"
           body_path: release_notes.md
-          files: build/Jellyfish-${{ steps.version.outputs.VERSION }}.zip
-
-      - name: Appcast committen
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add appcast.xml
-          git commit -m "appcast: v${{ steps.version.outputs.VERSION }}"
-          git fetch origin main
-          git rebase origin/main
-          git push origin HEAD:main
+          files: build/Jellyfish-${{ steps.version.outputs.VERSION }}.dmg
