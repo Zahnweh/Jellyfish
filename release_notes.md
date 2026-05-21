@@ -1,9 +1,3 @@
-## Jellyfish 0.0.2
-
-Interner Test-Release für den Auto-Updater.
-
----
-
 ## Jellyfish 0.0.1
 
 Erste öffentliche Version.

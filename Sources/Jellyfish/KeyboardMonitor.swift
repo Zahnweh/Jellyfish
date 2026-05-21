@@ -11,17 +11,14 @@ class KeyboardMonitor {
 
     func start() {
         guard AXIsProcessTrusted() else {
-            NSLog("[HotKey] Accessibility fehlt")
-            requestAccessibility()
+            NSLog("[HotKey] Bedienungshilfen fehlen")
+            DispatchQueue.main.async { self.showPermissionsAlert() }
             return
         }
-        // CGPreflightListenEventAccess() ist auf macOS 15 für nicht-notarisierte Apps
-        // unzuverlässig (gibt immer false zurück, auch nach erteilter Berechtigung).
-        // Stattdessen: Tap erstellen und am Ergebnis ablesen ob Input Monitoring gewährt ist.
+
         createTap()
         if eventTap == nil {
-            NSLog("[HotKey] Input Monitoring fehlt – Tap-Erstellung fehlgeschlagen")
-            DispatchQueue.main.async { self.showAccessAlert(missing: .inputMonitoring) }
+            NSLog("[HotKey] Tap-Erstellung fehlgeschlagen")
         } else {
             NSLog("[HotKey] Event Tap aktiv")
         }
@@ -187,49 +184,24 @@ class KeyboardMonitor {
         event.post(tap: .cghidEventTap)
     }
 
-    private func requestAccessibility() {
-        // System-Prompt auslösen (öffnet Systemeinstellungen auf macOS 13 nicht mehr automatisch)
-        let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true]
-        AXIsProcessTrustedWithOptions(options)
-        // Zusätzlich eigenen Dialog zeigen, da der System-Prompt oft unsichtbar bleibt
-        DispatchQueue.main.async { self.showAccessAlert(missing: .accessibility) }
-    }
-
-    private enum MissingPermission { case accessibility, inputMonitoring }
-
-    private func showAccessAlert(missing: MissingPermission) {
+    private func showPermissionsAlert() {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+
         let alert = NSAlert()
-        switch missing {
-        case .accessibility:
-            alert.messageText = "Jellyfish braucht Bedienungshilfen-Zugriff"
-            alert.informativeText = """
-                Damit Jellyfish Tastatureingaben erkennen kann, musst du die App in den Systemeinstellungen freigeben:
+        alert.messageText = "Jellyfish braucht Bedienungshilfen-Zugriff"
+        alert.informativeText = """
+            Damit Jellyfish Textkürzel erkennen kann, musst du die App in den Systemeinstellungen freigeben:
 
-                Datenschutz & Sicherheit → Bedienungshilfen → Jellyfish ✓
+            Datenschutz & Sicherheit → Bedienungshilfen → Jellyfish ✓
 
-                Starte Jellyfish danach neu.
-                """
-            alert.addButton(withTitle: "Bedienungshilfen öffnen")
-            alert.addButton(withTitle: "Später")
-            if alert.runModal() == .alertFirstButtonReturn {
-                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
-            }
-        case .inputMonitoring:
-            alert.messageText = "Jellyfish braucht Eingabeüberwachung"
-            alert.informativeText = """
-                Damit Jellyfish Tastatureingaben erkennen kann, musst du die App in den Systemeinstellungen freigeben:
+            Starte Jellyfish danach neu.
+            """
+        alert.addButton(withTitle: "Systemeinstellungen öffnen")
+        alert.addButton(withTitle: "Später")
 
-                Datenschutz & Sicherheit → Eingabeüberwachung → Jellyfish ✓
-
-                Starte Jellyfish danach neu.
-                """
-            alert.addButton(withTitle: "Eingabeüberwachung öffnen")
-            alert.addButton(withTitle: "Später")
-            if alert.runModal() == .alertFirstButtonReturn {
-                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")!)
-            }
+        if alert.runModal() == .alertFirstButtonReturn {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
         }
         NSApp.setActivationPolicy(.accessory)
     }

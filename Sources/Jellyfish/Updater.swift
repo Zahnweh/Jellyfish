@@ -3,7 +3,7 @@ import Foundation
 
 enum Updater {
 
-    static let version = "0.0.2"
+    static let version = "0.0.1"
 
     private static let apiURL = URL(string: "https://api.github.com/repos/Zahnweh/Jellyfish/releases/latest")!
 
