@@ -193,7 +193,7 @@ class KeyboardMonitor {
 
             Datenschutz & Sicherheit → Bedienungshilfen → Jellyfish ✓
 
-            Starte Jellyfish danach neu.
+            Jellyfish startet danach automatisch neu.
             """
         alert.addButton(withTitle: "Systemeinstellungen öffnen")
         alert.addButton(withTitle: "Später")
@@ -202,6 +202,43 @@ class KeyboardMonitor {
             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
         }
         NSApp.setActivationPolicy(.accessory)
+        startAccessibilityPoller()
+    }
+
+    private func startAccessibilityPoller() {
+        DispatchQueue.global(qos: .background).async { [weak self] in
+            var elapsed = 0.0
+            while elapsed < 300 {
+                Thread.sleep(forTimeInterval: 0.5)
+                elapsed += 0.5
+                guard self != nil else { return }
+                if AXIsProcessTrusted() {
+                    DispatchQueue.main.async { self?.restartApp() }
+                    return
+                }
+            }
+        }
+    }
+
+    private func restartApp() {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+
+        let alert = NSAlert()
+        alert.messageText = "Berechtigung erteilt"
+        alert.informativeText = "Jellyfish muss neu gestartet werden, damit die Änderungen wirksam werden."
+        alert.addButton(withTitle: "Jetzt neu starten")
+        alert.runModal()
+
+        let quoted = "'" + Bundle.main.bundleURL.path
+            .replacingOccurrences(of: "'", with: "'\\''") + "'"
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = ["-c", "sleep 0.5 && open \(quoted)"]
+        task.standardOutput = FileHandle.nullDevice
+        task.standardError = FileHandle.nullDevice
+        try? task.run()
+        NSApp.terminate(nil)
     }
 }
 

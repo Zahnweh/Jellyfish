@@ -55,6 +55,10 @@ final class SnippetPreviewWindowController: NSObject, NSWindowDelegate {
         tv.isSelectable = false
         tv.font = NSFont.systemFont(ofSize: 13)
         tv.textContainerInset = NSSize(width: 4, height: 4)
+        tv.isVerticallyResizable = true
+        tv.isHorizontallyResizable = false
+        tv.autoresizingMask = [.width]
+        tv.textContainer?.widthTracksTextView = true
         previewText = tv
 
         let sv = NSScrollView()
