@@ -24,11 +24,9 @@ bundle:
 
 	cp "$(BUILD_DIR)/$(APP_NAME)" "$(CONTENTS)/MacOS/$(APP_NAME)"
 
-	@if [ -d "$(BUILD_DIR)/$(APP_NAME)_$(APP_NAME).bundle" ]; then \
-		cp -R "$(BUILD_DIR)/$(APP_NAME)_$(APP_NAME).bundle" "$(APP_BUNDLE)/"; \
-	fi
-
 	cp Resources/*.icns "$(CONTENTS)/Resources/"
+	cp "Sources/Jellyfish/StatusBarTemplate@2x.png" "$(CONTENTS)/Resources/"
+	cp "Sources/Jellyfish/snippets.json" "$(CONTENTS)/Resources/"
 
 	@sed \
 		-e 's/$$(APP_VERSION)/$(APP_VERSION)/g' \

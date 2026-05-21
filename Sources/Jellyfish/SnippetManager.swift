@@ -28,7 +28,7 @@ class SnippetManager {
            let data = try? Data(contentsOf: storageURL),
            let decoded = try? JSONDecoder().decode([Snippet].self, from: data) {
             snippets = decoded
-        } else if let bundleURL = Bundle.module.url(forResource: "snippets", withExtension: "json"),
+        } else if let bundleURL = Bundle.main.url(forResource: "snippets", withExtension: "json"),
                   let data = try? Data(contentsOf: bundleURL),
                   let decoded = try? JSONDecoder().decode([Snippet].self, from: data) {
             snippets = decoded

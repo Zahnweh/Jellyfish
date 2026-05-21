@@ -59,7 +59,7 @@ class StatusBarController {
         let targetSize = NSSize(width: 19, height: 19)
         let fallback = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: "Jellyfish")!
 
-        guard let url = Bundle.module.url(forResource: "StatusBarTemplate@2x", withExtension: "png"),
+        guard let url = Bundle.main.url(forResource: "StatusBarTemplate@2x", withExtension: "png"),
               let source = NSImage(contentsOf: url) else { return fallback }
 
         // Skaliere auf 22pt Höhe, zentriere horizontal

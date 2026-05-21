@@ -10,10 +10,6 @@ let package = Package(
             name: "Jellyfish",
             dependencies: [],
             path: "Sources/Jellyfish",
-            resources: [
-                .process("snippets.json"),
-                .copy("StatusBarTemplate@2x.png"),
-            ]
         )
     ]
 )

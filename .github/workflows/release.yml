@@ -36,10 +36,9 @@ jobs:
 
           cp "$BUILD_DIR/Jellyfish" "$CONTENTS/MacOS/Jellyfish"
 
-          [ -d "$BUILD_DIR/Jellyfish_Jellyfish.bundle" ] && \
-            cp -R "$BUILD_DIR/Jellyfish_Jellyfish.bundle" "$APP/"
-
           cp Resources/*.icns "$CONTENTS/Resources/"
+          cp Sources/Jellyfish/StatusBarTemplate@2x.png "$CONTENTS/Resources/"
+          cp Sources/Jellyfish/snippets.json "$CONTENTS/Resources/"
 
           sed \
             -e "s/\$(APP_VERSION)/${{ steps.version.outputs.VERSION }}/g" \
