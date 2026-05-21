@@ -1,3 +1,10 @@
+## Neu in 0.0.4
+
+### Bugfix: App startet nicht (0.0.3)
+Ressourcen-Bundle wurde beim Start nicht gefunden — App crashte sofort. Behoben.
+
+---
+
 ## Neu in 0.0.3
 
 ### Verteilung als DMG

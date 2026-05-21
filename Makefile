@@ -1,6 +1,6 @@
 APP_NAME     := Jellyfish
-APP_VERSION  := 0.0.3
-BUILD_NUMBER := 3
+APP_VERSION  := 0.0.4
+BUILD_NUMBER := 4
 BUNDLE_ID    := de.extragroup.jellyfish
 ARCH         := $(shell uname -m)
 BUILD_DIR    := .build/$(ARCH)-apple-macosx/release
@@ -25,7 +25,7 @@ bundle:
 	cp "$(BUILD_DIR)/$(APP_NAME)" "$(CONTENTS)/MacOS/$(APP_NAME)"
 
 	@if [ -d "$(BUILD_DIR)/$(APP_NAME)_$(APP_NAME).bundle" ]; then \
-		cp -R "$(BUILD_DIR)/$(APP_NAME)_$(APP_NAME).bundle" "$(CONTENTS)/Resources/"; \
+		cp -R "$(BUILD_DIR)/$(APP_NAME)_$(APP_NAME).bundle" "$(APP_BUNDLE)/"; \
 	fi
 
 	cp Resources/*.icns "$(CONTENTS)/Resources/"
