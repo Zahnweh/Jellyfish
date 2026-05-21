@@ -505,6 +505,15 @@ final class SnippetListViewController: NSViewController {
         updateDeleteButton()
     }
 
+    func reloadCurrentSelection() {
+        let row = tableView?.selectedRow ?? -1
+        guard row >= 0 else { return }
+        // Reload only the selected cell to update the display name preview
+        // without clearing table selection (which would dismiss the editor)
+        tableView?.reloadData(forRowIndexes: IndexSet(integer: row),
+                              columnIndexes: IndexSet(integer: 0))
+    }
+
     private func updateDeleteButton() {
         deleteButton?.isEnabled = tableView?.selectedRow ?? -1 >= 0
     }
@@ -734,6 +743,10 @@ final class SnippetEditorViewController: NSViewController {
         expansionView.delegate = self
         expansionView.isRichText = false
         expansionView.allowsUndo = true
+        expansionView.isVerticallyResizable = true
+        expansionView.isHorizontallyResizable = false
+        expansionView.autoresizingMask = [.width]
+        expansionView.textContainer?.widthTracksTextView = true
 
         expansionScrollView = NSScrollView()
         expansionScrollView.hasVerticalScroller = true
@@ -867,7 +880,7 @@ final class SnippetEditorViewController: NSViewController {
         snippet.trigger = triggerField.stringValue.trimmingCharacters(in: .whitespaces)
         currentSnippet = snippet
         SnippetManager.shared.update(snippet)
-        listVC?.reload()
+        listVC?.reloadCurrentSelection()
         AppDelegate.shared?.statusBar.rebuild()
     }
 

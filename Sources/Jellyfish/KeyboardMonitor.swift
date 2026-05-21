@@ -11,11 +11,10 @@ class KeyboardMonitor {
 
     func start() {
         guard AXIsProcessTrusted() else {
-            NSLog("[HotKey] Bedienungshilfen fehlen")
+            NSLog("[HotKey] Bedienungshilfen nicht erteilt")
             DispatchQueue.main.async { self.showPermissionsAlert() }
             return
         }
-
         createTap()
         if eventTap == nil {
             NSLog("[HotKey] Tap-Erstellung fehlgeschlagen")
@@ -41,7 +40,6 @@ class KeyboardMonitor {
     func ensureEnabled() {
         guard let tap = eventTap else {
             NSLog("[HotKey] ensureEnabled: kein Tap – neu erstellen")
-            guard AXIsProcessTrusted() else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 self?.createTap()
             }
