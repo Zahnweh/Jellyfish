@@ -22,6 +22,10 @@
     <string>NSApplication</string>
     <key>LSUIElement</key>
     <true/>
+    <key>NSInputMonitoringUsageDescription</key>
+    <string>Jellyfish benötigt Eingabeüberwachung, um Textkürzel zu erkennen und automatisch zu expandieren.</string>
+    <key>NSAccessibilityUsageDescription</key>
+    <string>Jellyfish benötigt Bedienungshilfen-Zugriff, um Textkürzel zu erkennen und automatisch zu expandieren.</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>SUPublicEDKey</key>

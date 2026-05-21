@@ -7,15 +7,7 @@ class StatusBarController {
     func setup() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            if let url = Bundle.module.url(forResource: "StatusBarTemplate@2x", withExtension: "png"),
-               let image = NSImage(contentsOf: url) {
-                // Tell AppKit this is a @2x asset so it renders at half logical size
-                image.size = NSSize(width: image.size.width / 2, height: image.size.height / 2)
-                image.isTemplate = true
-                button.image = image
-            } else {
-                button.image = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: "Jellyfish")
-            }
+            button.image = menuBarIcon()
         }
         buildMenu()
     }
@@ -26,6 +18,9 @@ class StatusBarController {
         let header = NSMenuItem(title: "Jellyfish — Snippets", action: nil, keyEquivalent: "")
         header.isEnabled = false
         menu.addItem(header)
+        let openItem = NSMenuItem(title: "Jellyfish öffnen", action: #selector(openApp), keyEquivalent: "")
+        openItem.target = self
+        menu.addItem(openItem)
         menu.addItem(.separator())
 
         for (i, snippet) in SnippetManager.shared.snippets.enumerated() {
@@ -59,6 +54,36 @@ class StatusBarController {
 
     func rebuild() { buildMenu() }
 
+    // Jellyfish-Portrait zentriert in einem 22×22-Quadrat (Standard-Menüleisten-Größe)
+    private func menuBarIcon() -> NSImage {
+        let targetSize = NSSize(width: 19, height: 19)
+        let fallback = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: "Jellyfish")!
+
+        guard let url = Bundle.module.url(forResource: "StatusBarTemplate@2x", withExtension: "png"),
+              let source = NSImage(contentsOf: url) else { return fallback }
+
+        // Skaliere auf 22pt Höhe, zentriere horizontal
+        let srcW = source.size.width
+        let srcH = source.size.height
+        let scale = targetSize.height / srcH
+        let drawW = srcW * scale
+        let drawRect = NSRect(
+            x: (targetSize.width - drawW) / 2,
+            y: 0,
+            width: drawW,
+            height: targetSize.height
+        )
+
+        let icon = NSImage(size: targetSize)
+        icon.lockFocus()
+        source.draw(in: drawRect, from: NSRect(origin: .zero, size: source.size),
+                    operation: .sourceOver, fraction: 1.0)
+        icon.unlockFocus()
+        icon.isTemplate = true
+        return icon
+    }
+
+    @objc private func openApp() { SnippetEditorWindowController.shared.showManageMode() }
     @objc private func addSnippet() { SnippetEditorWindowController.shared.showAddMode() }
     @objc private func manageSnippets() { SnippetEditorWindowController.shared.showManageMode() }
     @objc private func checkForUpdates() { AppDelegate.shared?.checkForUpdates() }

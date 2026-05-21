@@ -7,20 +7,59 @@ class KeyboardMonitor {
     private var buffer: String = ""
     private let maxBuffer = 64
 
+    var isActive: Bool { eventTap != nil }
+
     func start() {
         guard AXIsProcessTrusted() else {
-            NSLog("[HotKey] Accessibility nicht erteilt – öffne Systemeinstellungen")
+            NSLog("[HotKey] Accessibility fehlt")
             requestAccessibility()
             return
         }
-        NSLog("[HotKey] Accessibility OK – erstelle Event Tap")
+        // macOS 10.15+: Input Monitoring ist eine eigene Berechtigung.
+        // CGEventTap gibt auch ohne sie einen non-nil Port zurück – empfängt aber keine Events.
+        // Deshalb explizit prüfen, bevor der Tap erstellt wird.
+        guard CGPreflightListenEventAccess() else {
+            NSLog("[HotKey] Input Monitoring fehlt – fordere an")
+            CGRequestListenEventAccess()
+            DispatchQueue.main.async { self.showAccessAlert(missing: .inputMonitoring) }
+            return
+        }
+        NSLog("[HotKey] Accessibility + Input Monitoring OK – erstelle Event Tap")
         createTap()
+        if eventTap == nil {
+            NSLog("[HotKey] FEHLER: Tap-Erstellung fehlgeschlagen trotz Berechtigungen")
+        }
     }
 
     func stop() {
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
         }
+        if let src = runLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), src, .commonModes)
+        }
+        eventTap = nil
+        runLoopSource = nil
+    }
+
+    // Nach setActivationPolicy(.accessory) aufrufen.
+    // macOS 26 deaktiviert den Tap beim Wechsel. Run-Loop-Source neu eintragen
+    // und tapEnable senden, ohne den Port zu zerstören.
+    func ensureEnabled() {
+        guard let tap = eventTap else {
+            NSLog("[HotKey] ensureEnabled: kein Tap – neu erstellen")
+            guard AXIsProcessTrusted() else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.createTap()
+            }
+            return
+        }
+        // Run-Loop-Source neu registrieren (macOS kann sie beim Policy-Wechsel entfernen)
+        if let src = runLoopSource {
+            CFRunLoopAddSource(CFRunLoopGetMain(), src, .commonModes)
+        }
+        CGEvent.tapEnable(tap: tap, enable: true)
+        NSLog("[HotKey] ensureEnabled: Tap reaktiviert")
     }
 
     private func createTap() {
@@ -133,8 +172,50 @@ class KeyboardMonitor {
     }
 
     private func requestAccessibility() {
+        // System-Prompt auslösen (öffnet Systemeinstellungen auf macOS 13 nicht mehr automatisch)
         let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true]
         AXIsProcessTrustedWithOptions(options)
+        // Zusätzlich eigenen Dialog zeigen, da der System-Prompt oft unsichtbar bleibt
+        DispatchQueue.main.async { self.showAccessAlert(missing: .accessibility) }
+    }
+
+    private enum MissingPermission { case accessibility, inputMonitoring }
+
+    private func showAccessAlert(missing: MissingPermission) {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        switch missing {
+        case .accessibility:
+            alert.messageText = "Jellyfish braucht Bedienungshilfen-Zugriff"
+            alert.informativeText = """
+                Damit Jellyfish Tastatureingaben erkennen kann, musst du die App in den Systemeinstellungen freigeben:
+
+                Datenschutz & Sicherheit → Bedienungshilfen → Jellyfish ✓
+
+                Starte Jellyfish danach neu.
+                """
+            alert.addButton(withTitle: "Bedienungshilfen öffnen")
+            alert.addButton(withTitle: "Später")
+            if alert.runModal() == .alertFirstButtonReturn {
+                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+            }
+        case .inputMonitoring:
+            alert.messageText = "Jellyfish braucht Eingabeüberwachung"
+            alert.informativeText = """
+                Damit Jellyfish Tastatureingaben erkennen kann, musst du die App in den Systemeinstellungen freigeben:
+
+                Datenschutz & Sicherheit → Eingabeüberwachung → Jellyfish ✓
+
+                Starte Jellyfish danach neu.
+                """
+            alert.addButton(withTitle: "Eingabeüberwachung öffnen")
+            alert.addButton(withTitle: "Später")
+            if alert.runModal() == .alertFirstButtonReturn {
+                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")!)
+            }
+        }
+        NSApp.setActivationPolicy(.accessory)
     }
 }
 

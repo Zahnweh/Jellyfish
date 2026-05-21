@@ -5,7 +5,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     static weak var shared: AppDelegate?
 
     let statusBar = StatusBarController()
-    private let keyboardMonitor = KeyboardMonitor()
+    let keyboardMonitor = KeyboardMonitor()
     private var updaterController: SPUStandardUpdaterController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -21,6 +21,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusBar.setup()
         keyboardMonitor.start()
         LoginItemManager.enable()
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        return false
     }
 
     func applicationWillTerminate(_ notification: Notification) {

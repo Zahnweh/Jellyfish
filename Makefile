@@ -39,8 +39,8 @@ bundle:
 		cp -R "$(BUILD_DIR)/$(APP_NAME)_$(APP_NAME).bundle" "$(CONTENTS)/Resources/"; \
 	fi
 
-	# App icon
-	cp "Resources/AppIcon.icns" "$(CONTENTS)/Resources/"
+	# App icons (alle Varianten für dynamisches Erscheinungsbild)
+	cp Resources/*.icns "$(CONTENTS)/Resources/"
 
 	# Info.plist — substitute version placeholders
 	@sed \
@@ -50,8 +50,9 @@ bundle:
 
 	# Extended Attributes entfernen (verhindert codesign-Fehler)
 	xattr -cr "$(APP_BUNDLE)"
-	# Ad-hoc code sign
-	codesign --force --deep --sign - "$(APP_BUNDLE)"
+	# Mit lokalem Self-signed-Zertifikat signieren (stabiles TCC-Identity)
+	codesign --force --deep --sign "Jellyfish Local Signing" "$(APP_BUNDLE)" 2>/dev/null || \
+		codesign --force --deep --sign - "$(APP_BUNDLE)"
 	@echo "✅ $(APP_BUNDLE) fertig"
 
 # ── Install ────────────────────────────────────────────────────────────────────

@@ -27,8 +27,33 @@ class SnippetEditorWindowController: NSObject, NSWindowDelegate {
     private func present() {
         if window == nil { buildWindow() }
         updateUI()
+        // Policy-Wechsel: Dock-Icon einblenden.
+        // Icon und Tap danach setzen – macOS 26 deaktiviert beides beim Wechsel.
+        NSApp.setActivationPolicy(.regular)
+        AppIconManager.shared.update()
+        installMainMenu()
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func installMainMenu() {
+        let mainMenu = NSMenu()
+
+        let appItem = NSMenuItem(); mainMenu.addItem(appItem)
+        let appMenu = NSMenu()
+        appMenu.addItem(NSMenuItem(title: "Jellyfish beenden",
+                                   action: #selector(NSApplication.terminate(_:)),
+                                   keyEquivalent: "q"))
+        appItem.submenu = appMenu
+
+        let fileItem = NSMenuItem(); mainMenu.addItem(fileItem)
+        let fileMenu = NSMenu(title: "Ablage")
+        fileMenu.addItem(NSMenuItem(title: "Schließen",
+                                    action: #selector(NSWindow.performClose(_:)),
+                                    keyEquivalent: "w"))
+        fileItem.submenu = fileMenu
+
+        NSApp.mainMenu = mainMenu
     }
 
     private func buildWindow() {
@@ -38,8 +63,9 @@ class SnippetEditorWindowController: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        w.title = "HotKey — Snippets"
+        w.title = "Jellyfish — Snippets"
         w.delegate = self
+        w.isReleasedWhenClosed = false
         w.center()
         w.contentView = buildContentView()
         window = w
@@ -157,7 +183,10 @@ class SnippetEditorWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
-        window = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            NSApp.setActivationPolicy(.accessory)
+            AppDelegate.shared?.keyboardMonitor.ensureEnabled()
+        }
     }
 }
 
