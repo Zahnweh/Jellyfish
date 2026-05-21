@@ -87,10 +87,11 @@ jobs:
           URL="https://github.com/Zahnweh/Jellyfish/releases/download/v${VERSION}/Jellyfish-${VERSION}.zip"
 
           ITEM="        <item>
-              <title>Version ${VERSION}</title>
+              <title>Jellyfish ${VERSION}</title>
               <pubDate>${DATE}</pubDate>
               <sparkle:version>${BUILD}</sparkle:version>
               <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+              <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
               <enclosure
                   url=\"${URL}\"
                   ${SIG}
@@ -114,6 +115,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: "Jellyfish ${{ steps.version.outputs.VERSION }}"
+          body_path: release_notes.md
           files: build/Jellyfish-${{ steps.version.outputs.VERSION }}.zip
 
       - name: Appcast committen

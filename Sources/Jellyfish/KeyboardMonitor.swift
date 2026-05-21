@@ -97,6 +97,13 @@ class KeyboardMonitor {
 
         guard type == .keyDown else { return Unmanaged.passRetained(event) }
 
+        // Kein Matching während das Editor-Fenster fokussiert ist – sonst würden
+        // Eingaben im Textfeld versehentlich als Snippets expandiert.
+        if NSApp.keyWindow != nil {
+            buffer = ""
+            return Unmanaged.passRetained(event)
+        }
+
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let flags = event.flags
 
@@ -131,7 +138,17 @@ class KeyboardMonitor {
                 let trigger = match.trigger
                 let expansion = match.expansion
                 DispatchQueue.main.async {
-                    self.replace(trigger: trigger, with: expansion)
+                    if DropdownPlaceholder.hasPlaceholders(in: expansion) {
+                        self.deleteTrigger(trigger)
+                        // Delay so the backspace events reach the target app before the panel takes key focus
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                            SnippetPreviewWindowController.shared.show(expansion: expansion) { [weak self] resolved in
+                                self?.paste(resolved)
+                            }
+                        }
+                    } else {
+                        self.replace(trigger: trigger, with: expansion)
+                    }
                 }
             }
         }
@@ -140,24 +157,27 @@ class KeyboardMonitor {
     }
 
     private func replace(trigger: String, with expansion: String) {
-        // Trigger-Zeichen löschen (inkl. des zuletzt getippten Zeichens)
+        deleteTrigger(trigger)
+        paste(expansion)
+    }
+
+    private func deleteTrigger(_ trigger: String) {
         for _ in trigger {
             postKey(keyCode: 51, keyDown: true)
             postKey(keyCode: 51, keyDown: false)
         }
+    }
 
-        // Expansion über Zwischenablage einfügen
+    private func paste(_ text: String) {
         let pb = NSPasteboard.general
         let previous = pb.string(forType: .string)
         pb.clearContents()
-        pb.setString(expansion, forType: .string)
+        pb.setString(text, forType: .string)
 
-        // Kleines Delay damit die Backspaces ankommen
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             self.postKey(keyCode: 9, keyDown: true, flags: .maskCommand)
             self.postKey(keyCode: 9, keyDown: false, flags: .maskCommand)
 
-            // Zwischenablage wiederherstellen
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 pb.clearContents()
                 if let prev = previous { pb.setString(prev, forType: .string) }

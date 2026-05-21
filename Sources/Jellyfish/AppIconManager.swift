@@ -30,7 +30,26 @@ class AppIconManager: NSObject {
 
     // Nach setActivationPolicy(.regular) aufrufen
     func update() {
-        NSApp.applicationIconImage = resolveIcon()
+        guard let raw = resolveIcon() else { return }
+        NSApp.applicationIconImage = padded(raw)
+    }
+
+    // Artwork auf 80 % des Canvas verkleinern (10 % Rand auf jeder Seite),
+    // damit das Icon optisch mit anderen macOS-App-Icons übereinstimmt.
+    private func padded(_ source: NSImage) -> NSImage {
+        let pt: CGFloat = 512       // Standard-Dock-Icon-Größe in Punkten
+        let inset = pt * 0.10
+        source.size = NSSize(width: pt, height: pt)
+        let result = NSImage(size: NSSize(width: pt, height: pt))
+        result.lockFocus()
+        source.draw(in: NSRect(x: inset, y: inset,
+                               width: pt - 2 * inset,
+                               height: pt - 2 * inset),
+                    from: NSRect(origin: .zero, size: source.size),
+                    operation: .sourceOver,
+                    fraction: 1.0)
+        result.unlockFocus()
+        return result
     }
 
     @objc private func appearanceChanged() {
