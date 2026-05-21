@@ -1,0 +1,125 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: macos-15
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode Command Line Tools
+        run: xcode-select --install 2>/dev/null || true
+
+      - name: Version aus Tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Swift Package auflösen
+        run: swift package resolve
+
+      - name: Release Build
+        run: |
+          swift build -c release \
+            -Xlinker -rpath -Xlinker "@executable_path/../Frameworks"
+
+      - name: App Bundle erstellen
+        run: |
+          APP=build/Jellyfish.app
+          CONTENTS=$APP/Contents
+          ARCH=$(uname -m)
+          BUILD_DIR=.build/${ARCH}-apple-macosx/release
+
+          rm -rf "$APP"
+          mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources" "$CONTENTS/Frameworks"
+
+          cp "$BUILD_DIR/Jellyfish" "$CONTENTS/MacOS/Jellyfish"
+
+          SPARKLE_FW=$(find .build/artifacts -name "Sparkle.framework" -type d | head -1)
+          [ -n "$SPARKLE_FW" ] && cp -R "$SPARKLE_FW" "$CONTENTS/Frameworks/"
+
+          [ -d "$BUILD_DIR/Jellyfish_Jellyfish.bundle" ] && \
+            cp -R "$BUILD_DIR/Jellyfish_Jellyfish.bundle" "$CONTENTS/Resources/"
+
+          cp Resources/AppIcon.icns "$CONTENTS/Resources/"
+
+          sed \
+            -e "s/\$(APP_VERSION)/${{ steps.version.outputs.VERSION }}/g" \
+            -e "s/\$(BUILD_NUMBER)/${{ github.run_number }}/g" \
+            Resources/Info.plist > "$CONTENTS/Info.plist"
+
+          codesign --force --deep --sign - "$APP"
+
+      - name: ZIP erstellen
+        run: |
+          cd build
+          zip -r "Jellyfish-${{ steps.version.outputs.VERSION }}.zip" Jellyfish.app
+
+      - name: Sparkle Tools herunterladen
+        run: |
+          curl -L https://github.com/sparkle-project/Sparkle/releases/download/2.9.2/Sparkle-2.9.2.tar.xz \
+               -o /tmp/sparkle.tar.xz
+          mkdir -p /tmp/sparkle && tar -xf /tmp/sparkle.tar.xz -C /tmp/sparkle
+
+      - name: Update signieren
+        id: sign
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          ZIP="build/Jellyfish-${{ steps.version.outputs.VERSION }}.zip"
+          SIG=$(echo "$SPARKLE_PRIVATE_KEY" | /tmp/sparkle/bin/sign_update --ed-key-file - "$ZIP")
+          echo "SIGNATURE=$SIG" >> $GITHUB_OUTPUT
+          echo "LENGTH=$(wc -c < $ZIP | tr -d ' ')" >> $GITHUB_OUTPUT
+
+      - name: Appcast aktualisieren
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          DATE=$(date -u "+%a, %d %b %Y %H:%M:%S +0000")
+          BUILD="${{ github.run_number }}"
+          SIG="${{ steps.sign.outputs.SIGNATURE }}"
+          LEN="${{ steps.sign.outputs.LENGTH }}"
+          URL="https://github.com/Zahnweh/Jellyfish/releases/download/v${VERSION}/Jellyfish-${VERSION}.zip"
+
+          ITEM="        <item>
+              <title>Version ${VERSION}</title>
+              <pubDate>${DATE}</pubDate>
+              <sparkle:version>${BUILD}</sparkle:version>
+              <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+              <enclosure
+                  url=\"${URL}\"
+                  ${SIG}
+                  length=\"${LEN}\"
+                  type=\"application/octet-stream\" />
+          </item>"
+
+          # Füge Item vor </channel> ein
+          python3 - <<EOF
+          import re, sys
+          with open('appcast.xml', 'r') as f:
+              content = f.read()
+          item = """${ITEM}"""
+          content = content.replace('    </channel>', item + '\n    </channel>')
+          with open('appcast.xml', 'w') as f:
+              f.write(content)
+          EOF
+
+      - name: GitHub Release erstellen
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Jellyfish ${{ steps.version.outputs.VERSION }}"
+          files: build/Jellyfish-${{ steps.version.outputs.VERSION }}.zip
+
+      - name: Appcast committen
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add appcast.xml
+          git commit -m "appcast: v${{ steps.version.outputs.VERSION }}"
+          git push origin HEAD:main

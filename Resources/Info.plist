@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>de.extragroup.jellyfish</string>
+    <key>CFBundleName</key>
+    <string>Jellyfish</string>
+    <key>CFBundleDisplayName</key>
+    <string>Jellyfish</string>
+    <key>CFBundleExecutable</key>
+    <string>Jellyfish</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>$(APP_VERSION)</string>
+    <key>CFBundleVersion</key>
+    <string>$(BUILD_NUMBER)</string>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <key>SUPublicEDKey</key>
+    <string>dJvJ5EPA/VKtv0fp5FnnQ0huP8Zxj1cVLXnTg0VmrZ4=</string>
+    <key>SUFeedURL</key>
+    <string>https://raw.githubusercontent.com/Zahnweh/Jellyfish/main/appcast.xml</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+</dict>
+</plist>

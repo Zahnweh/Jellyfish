@@ -1,0 +1,14 @@
+[
+  {
+    "trigger": "mfg#",
+    "expansion": "Mit freundlichen Grüßen\nMarcelo Ostendorf"
+  },
+  {
+    "trigger": "lg#",
+    "expansion": "Liebe Grüße"
+  },
+  {
+    "trigger": "addr#",
+    "expansion": "Musterstraße 1\n12345 Musterstadt"
+  }
+]
