@@ -107,6 +107,7 @@ enum Updater {
                 if [ -d \(q(newApp.path)) ]; then
                     rm -rf \(q(currentApp.path))
                     ditto \(q(newApp.path)) \(q(currentApp.path))
+                    /usr/bin/xattr -dr com.apple.quarantine \(q(currentApp.path))
                 fi
                 hdiutil detach \(q(mnt.path)) 2>/dev/null
                 rm -f \(q(dmg.path))
