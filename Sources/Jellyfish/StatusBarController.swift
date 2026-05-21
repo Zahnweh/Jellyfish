@@ -23,15 +23,6 @@ class StatusBarController {
         menu.addItem(openItem)
         menu.addItem(.separator())
 
-        for (i, snippet) in SnippetManager.shared.snippets.enumerated() {
-            let preview = snippet.expansion.prefix(40).replacingOccurrences(of: "\n", with: " ")
-            let item = NSMenuItem(title: "\(snippet.trigger)  →  \(preview)", action: nil, keyEquivalent: "")
-            item.tag = i
-            menu.addItem(item)
-        }
-
-        menu.addItem(.separator())
-
         let addItem = NSMenuItem(title: "Snippet hinzufügen…", action: #selector(addSnippet), keyEquivalent: "n")
         addItem.target = self
         menu.addItem(addItem)
@@ -42,7 +33,7 @@ class StatusBarController {
 
         menu.addItem(.separator())
 
-        let updateItem = NSMenuItem(title: "Releases auf GitHub…", action: #selector(openReleases), keyEquivalent: "")
+        let updateItem = NSMenuItem(title: "Nach Updates suchen…", action: #selector(checkForUpdates), keyEquivalent: "")
         updateItem.target = self
         menu.addItem(updateItem)
 
@@ -86,7 +77,5 @@ class StatusBarController {
     @objc private func openApp() { SnippetEditorWindowController.shared.showManageMode() }
     @objc private func addSnippet() { SnippetEditorWindowController.shared.showAddMode() }
     @objc private func manageSnippets() { SnippetEditorWindowController.shared.showManageMode() }
-    @objc private func openReleases() {
-        NSWorkspace.shared.open(URL(string: "https://github.com/Zahnweh/Jellyfish/releases")!)
-    }
+    @objc private func checkForUpdates() { Updater.checkManually() }
 }

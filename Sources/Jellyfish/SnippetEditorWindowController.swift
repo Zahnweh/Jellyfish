@@ -647,6 +647,7 @@ final class SnippetEditorViewController: NSViewController {
 
     private var timestampButton: NSButton!
     private var dropdownButton: NSButton!
+    private var iconToolbar: NSView!
 
     // Flag to suppress saving while we're programmatically populating fields
     private var isPopulating = false
@@ -662,6 +663,25 @@ final class SnippetEditorViewController: NSViewController {
         super.viewDidLoad()
         buildUI()
         showEmpty()
+    }
+
+    private func makeIconButton(resource: String, tooltip: String, action: Selector) -> NSButton {
+        let btn = NSButton(title: "", target: self, action: action)
+        btn.bezelStyle = .inline
+        btn.isBordered = false
+        btn.toolTip = tooltip
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        if let url = Bundle.main.url(forResource: resource, withExtension: "svg"),
+           let img = NSImage(contentsOf: url) {
+            img.isTemplate = true
+            let sized = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
+                img.draw(in: rect)
+                return true
+            }
+            sized.isTemplate = true
+            btn.image = sized
+        }
+        return btn
     }
 
     private func buildUI() {
@@ -750,30 +770,38 @@ final class SnippetEditorViewController: NSViewController {
         triggerField.delegate = self
         formContainer.addSubview(triggerField)
 
-        // Timestamp insert button — sits in the title row on the trailing side
-        timestampButton = NSButton(title: "Zeitstempel", target: self,
-                                   action: #selector(showTimestampMenu(_:)))
-        timestampButton.bezelStyle = .rounded
-        timestampButton.translatesAutoresizingMaskIntoConstraints = false
-        formContainer.addSubview(timestampButton)
+        // Icon toolbar between content type row and text editor
+        timestampButton = makeIconButton(resource: "icon-clock", tooltip: "Zeitstempel einfügen",
+                                         action: #selector(showTimestampMenu(_:)))
+        dropdownButton = makeIconButton(resource: "icon-dropdown", tooltip: "Dropdown einfügen",
+                                        action: #selector(showDropdownDialog))
 
-        // Dropdown insert button — sits to the left of the timestamp button
-        dropdownButton = NSButton(title: "Dropdown", target: self,
-                                  action: #selector(showDropdownDialog))
-        dropdownButton.bezelStyle = .rounded
-        dropdownButton.translatesAutoresizingMaskIntoConstraints = false
-        formContainer.addSubview(dropdownButton)
+        iconToolbar = NSView()
+        iconToolbar.translatesAutoresizingMaskIntoConstraints = false
+        iconToolbar.addSubview(timestampButton)
+        iconToolbar.addSubview(dropdownButton)
+        formContainer.addSubview(iconToolbar)
+
+        NSLayoutConstraint.activate([
+            timestampButton.leadingAnchor.constraint(equalTo: iconToolbar.leadingAnchor),
+            timestampButton.centerYAnchor.constraint(equalTo: iconToolbar.centerYAnchor),
+            timestampButton.widthAnchor.constraint(equalToConstant: 24),
+            timestampButton.heightAnchor.constraint(equalToConstant: 24),
+
+            dropdownButton.leadingAnchor.constraint(equalTo: timestampButton.trailingAnchor, constant: 4),
+            dropdownButton.centerYAnchor.constraint(equalTo: iconToolbar.centerYAnchor),
+            dropdownButton.widthAnchor.constraint(equalToConstant: 24),
+            dropdownButton.heightAnchor.constraint(equalToConstant: 24),
+
+            iconToolbar.heightAnchor.constraint(equalToConstant: 28),
+            iconToolbar.leadingAnchor.constraint(equalTo: formContainer.leadingAnchor),
+            iconToolbar.trailingAnchor.constraint(equalTo: formContainer.trailingAnchor),
+        ])
 
         NSLayoutConstraint.activate([
             titleLabel.topAnchor.constraint(equalTo: formContainer.topAnchor),
             titleLabel.leadingAnchor.constraint(equalTo: formContainer.leadingAnchor),
-            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: dropdownButton.leadingAnchor, constant: -8),
-
-            dropdownButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
-            dropdownButton.trailingAnchor.constraint(equalTo: timestampButton.leadingAnchor, constant: -8),
-
-            timestampButton.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
-            timestampButton.trailingAnchor.constraint(equalTo: formContainer.trailingAnchor),
+            titleLabel.trailingAnchor.constraint(equalTo: formContainer.trailingAnchor),
 
             contentTypeLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 14),
             contentTypeLabel.leadingAnchor.constraint(equalTo: formContainer.leadingAnchor),
@@ -782,7 +810,9 @@ final class SnippetEditorViewController: NSViewController {
             contentTypePopup.leadingAnchor.constraint(equalTo: contentTypeLabel.trailingAnchor, constant: 8),
             contentTypePopup.widthAnchor.constraint(equalToConstant: 140),
 
-            expansionScrollView.topAnchor.constraint(equalTo: contentTypeLabel.bottomAnchor, constant: 10),
+            iconToolbar.topAnchor.constraint(equalTo: contentTypeLabel.bottomAnchor, constant: 8),
+
+            expansionScrollView.topAnchor.constraint(equalTo: iconToolbar.bottomAnchor, constant: 4),
             expansionScrollView.leadingAnchor.constraint(equalTo: formContainer.leadingAnchor),
             expansionScrollView.trailingAnchor.constraint(equalTo: formContainer.trailingAnchor),
 
@@ -940,6 +970,17 @@ class SnippetEditorWindowController: NSObject, NSWindowDelegate {
                                     action: #selector(NSWindow.performClose(_:)),
                                     keyEquivalent: "w"))
         fileItem.submenu = fileMenu
+
+        let editItem = NSMenuItem(); mainMenu.addItem(editItem)
+        let editMenu = NSMenu(title: "Bearbeiten")
+        editMenu.addItem(NSMenuItem(title: "Rückgängig", action: Selector(("undo:")), keyEquivalent: "z"))
+        editMenu.addItem(NSMenuItem(title: "Wiederholen", action: Selector(("redo:")), keyEquivalent: "Z"))
+        editMenu.addItem(.separator())
+        editMenu.addItem(NSMenuItem(title: "Ausschneiden", action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
+        editMenu.addItem(NSMenuItem(title: "Kopieren", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
+        editMenu.addItem(NSMenuItem(title: "Einsetzen", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
+        editMenu.addItem(NSMenuItem(title: "Alles auswählen", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+        editItem.submenu = editMenu
 
         NSApp.mainMenu = mainMenu
     }

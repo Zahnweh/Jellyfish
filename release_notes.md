@@ -1,3 +1,22 @@
+## Neu in 0.0.5
+
+### Auto-Update
+„Nach Updates suchen…" im Statusleisten-Menü prüft GitHub auf neue Versionen und installiert das Update automatisch – genau wie bei UnquarantineApp.
+
+### Bugfix: Berechtigungen werden jetzt gespeichert
+Input-Monitoring-Berechtigung musste bisher bei jedem Start neu erteilt werden. Behoben.
+
+### Snippet-Liste aus Statusleisten-Menü entfernt
+Das Menü zeigt nur noch Aktionen, keine Snippet-Vorschau mehr.
+
+### Einsetzen (Cmd+V) im Texteditor
+Einfügen aus der Zwischenablage funktioniert jetzt im Snippet-Editor.
+
+### Icons für Zeitstempel und Dropdown
+Die Buttons wurden durch Material Design Icons ersetzt und zwischen „Inhaltstyp" und dem Textfeld positioniert.
+
+---
+
 ## Neu in 0.0.4
 
 ### Bugfix: App startet nicht (0.0.3)

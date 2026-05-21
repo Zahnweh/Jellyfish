@@ -12,6 +12,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusBar.setup()
         keyboardMonitor.start()
         LoginItemManager.enable()
+        Updater.checkOnLaunch()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

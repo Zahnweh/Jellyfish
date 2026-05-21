@@ -15,19 +15,15 @@ class KeyboardMonitor {
             requestAccessibility()
             return
         }
-        // macOS 10.15+: Input Monitoring ist eine eigene Berechtigung.
-        // CGEventTap gibt auch ohne sie einen non-nil Port zurück – empfängt aber keine Events.
-        // Deshalb explizit prüfen, bevor der Tap erstellt wird.
-        guard CGPreflightListenEventAccess() else {
-            NSLog("[HotKey] Input Monitoring fehlt – fordere an")
-            CGRequestListenEventAccess()
-            DispatchQueue.main.async { self.showAccessAlert(missing: .inputMonitoring) }
-            return
-        }
-        NSLog("[HotKey] Accessibility + Input Monitoring OK – erstelle Event Tap")
+        // CGPreflightListenEventAccess() ist auf macOS 15 für nicht-notarisierte Apps
+        // unzuverlässig (gibt immer false zurück, auch nach erteilter Berechtigung).
+        // Stattdessen: Tap erstellen und am Ergebnis ablesen ob Input Monitoring gewährt ist.
         createTap()
         if eventTap == nil {
-            NSLog("[HotKey] FEHLER: Tap-Erstellung fehlgeschlagen trotz Berechtigungen")
+            NSLog("[HotKey] Input Monitoring fehlt – Tap-Erstellung fehlgeschlagen")
+            DispatchQueue.main.async { self.showAccessAlert(missing: .inputMonitoring) }
+        } else {
+            NSLog("[HotKey] Event Tap aktiv")
         }
     }
 
