@@ -3,7 +3,9 @@ import Foundation
 
 enum Updater {
 
-    static let version = "0.0.2"
+    static let version: String = {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
+    }()
 
     private static let apiURL = URL(string: "https://api.github.com/repos/Zahnweh/Jellyfish/releases/latest")!
 
@@ -47,8 +49,9 @@ enum Updater {
                 let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                 let tag = json["tag_name"] as? String,
                 let assets = json["assets"] as? [[String: Any]],
-                let dmg = assets.first(where: { ($0["name"] as? String)?.hasSuffix(".dmg") == true }),
-                let urlStr = dmg["browser_download_url"] as? String,
+                let asset = assets.first(where: { ($0["name"] as? String)?.hasSuffix(".dmg") == true })
+                          ?? assets.first(where: { ($0["name"] as? String)?.hasSuffix(".zip") == true }),
+                let urlStr = asset["browser_download_url"] as? String,
                 let downloadURL = URL(string: urlStr)
             else { completion(nil, nil); return }
 
@@ -72,66 +75,117 @@ enum Updater {
     }
 
     private static func downloadAndInstall(from url: URL) {
+        let isDMG = url.pathExtension.lowercased() == "dmg"
         URLSession.shared.downloadTask(with: url) { tempURL, _, error in
             guard let tempURL, error == nil else {
                 DispatchQueue.main.async { showError("Download fehlgeschlagen.") }
                 return
             }
-
-            let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
-            let dmg = tmp.appendingPathComponent("Jellyfish_update.dmg")
-            let mnt = tmp.appendingPathComponent("Jellyfish_mnt_\(Int.random(in: 10000...99999))")
-            let currentApp = Bundle.main.bundleURL
-
-            do {
-                try? FileManager.default.removeItem(at: dmg)
-                try FileManager.default.moveItem(at: tempURL, to: dmg)
-
-                let mountProc = Process()
-                mountProc.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
-                mountProc.arguments = ["attach", "-noverify", "-noautoopen", "-mountpoint", mnt.path, dmg.path]
-                mountProc.standardOutput = Pipe()
-                mountProc.standardError = Pipe()
-                try mountProc.run()
-                mountProc.waitUntilExit()
-                guard mountProc.terminationStatus == 0 else {
-                    throw NSError(domain: "Updater", code: 1,
-                                  userInfo: [NSLocalizedDescriptionKey: "DMG konnte nicht gemountet werden."])
-                }
-
-                let newApp = mnt.appendingPathComponent("Jellyfish.app")
-
-                let script = """
-                #!/bin/bash
-                sleep 2
-                if [ -d \(q(newApp.path)) ]; then
-                    rm -rf \(q(currentApp.path))
-                    ditto \(q(newApp.path)) \(q(currentApp.path))
-                    /usr/bin/xattr -dr com.apple.quarantine \(q(currentApp.path))
-                fi
-                hdiutil detach \(q(mnt.path)) 2>/dev/null
-                rm -f \(q(dmg.path))
-                open \(q(currentApp.path))
-                """
-
-                let scriptURL = tmp.appendingPathComponent("jellyfish_update.sh")
-                try script.write(to: scriptURL, atomically: true, encoding: .utf8)
-                try FileManager.default.setAttributes([.posixPermissions: 0o755],
-                                                      ofItemAtPath: scriptURL.path)
-
-                DispatchQueue.main.async {
-                    let task = Process()
-                    task.executableURL = URL(fileURLWithPath: "/usr/bin/nohup")
-                    task.arguments = ["/bin/bash", scriptURL.path]
-                    task.standardOutput = FileHandle.nullDevice
-                    task.standardError = FileHandle.nullDevice
-                    try? task.run()
-                    NSApp.terminate(nil)
-                }
-            } catch {
-                DispatchQueue.main.async { showError(error.localizedDescription) }
+            if isDMG {
+                installFromDMG(tempURL: tempURL)
+            } else {
+                installFromZIP(tempURL: tempURL)
             }
         }.resume()
+    }
+
+    private static func installFromDMG(tempURL: URL) {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        let dmg = tmp.appendingPathComponent("Jellyfish_update.dmg")
+        let mnt = tmp.appendingPathComponent("Jellyfish_mnt_\(Int.random(in: 10000...99999))")
+        let currentApp = Bundle.main.bundleURL
+
+        do {
+            try? FileManager.default.removeItem(at: dmg)
+            try FileManager.default.moveItem(at: tempURL, to: dmg)
+
+            let mountProc = Process()
+            mountProc.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
+            mountProc.arguments = ["attach", "-noverify", "-noautoopen", "-mountpoint", mnt.path, dmg.path]
+            mountProc.standardOutput = Pipe()
+            mountProc.standardError = Pipe()
+            try mountProc.run()
+            mountProc.waitUntilExit()
+            guard mountProc.terminationStatus == 0 else {
+                throw NSError(domain: "Updater", code: 1,
+                              userInfo: [NSLocalizedDescriptionKey: "DMG konnte nicht gemountet werden."])
+            }
+
+            let newApp = mnt.appendingPathComponent("Jellyfish.app")
+            let script = """
+            #!/bin/bash
+            sleep 2
+            if [ -d \(q(newApp.path)) ]; then
+                rm -rf \(q(currentApp.path))
+                ditto \(q(newApp.path)) \(q(currentApp.path))
+                /usr/bin/xattr -dr com.apple.quarantine \(q(currentApp.path))
+            fi
+            hdiutil detach \(q(mnt.path)) 2>/dev/null
+            rm -f \(q(dmg.path))
+            open \(q(currentApp.path))
+            """
+            try launchUpdateScript(script, in: tmp)
+        } catch {
+            DispatchQueue.main.async { showError(error.localizedDescription) }
+        }
+    }
+
+    private static func installFromZIP(tempURL: URL) {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        let zipDest = tmp.appendingPathComponent("Jellyfish_update.zip")
+        let extractDir = tmp.appendingPathComponent("Jellyfish_update_\(Int.random(in: 10000...99999))")
+        let currentApp = Bundle.main.bundleURL
+
+        do {
+            try? FileManager.default.removeItem(at: zipDest)
+            try? FileManager.default.removeItem(at: extractDir)
+            try FileManager.default.moveItem(at: tempURL, to: zipDest)
+            try FileManager.default.createDirectory(at: extractDir, withIntermediateDirectories: true)
+
+            let unzip = Process()
+            unzip.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
+            unzip.arguments = ["-q", zipDest.path, "-d", extractDir.path]
+            unzip.standardOutput = Pipe()
+            unzip.standardError = Pipe()
+            try unzip.run()
+            unzip.waitUntilExit()
+            guard unzip.terminationStatus == 0 else {
+                throw NSError(domain: "Updater", code: 1,
+                              userInfo: [NSLocalizedDescriptionKey: "ZIP konnte nicht entpackt werden."])
+            }
+
+            let newApp = extractDir.appendingPathComponent("Jellyfish.app")
+            let script = """
+            #!/bin/bash
+            sleep 2
+            if [ -d \(q(newApp.path)) ]; then
+                rm -rf \(q(currentApp.path))
+                ditto \(q(newApp.path)) \(q(currentApp.path))
+                /usr/bin/xattr -dr com.apple.quarantine \(q(currentApp.path))
+            fi
+            rm -rf \(q(extractDir.path))
+            rm -f \(q(zipDest.path))
+            open \(q(currentApp.path))
+            """
+            try launchUpdateScript(script, in: tmp)
+        } catch {
+            DispatchQueue.main.async { showError(error.localizedDescription) }
+        }
+    }
+
+    private static func launchUpdateScript(_ script: String, in tmp: URL) throws {
+        let scriptURL = tmp.appendingPathComponent("jellyfish_update.sh")
+        try script.write(to: scriptURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptURL.path)
+        DispatchQueue.main.async {
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/nohup")
+            task.arguments = ["/bin/bash", scriptURL.path]
+            task.standardOutput = FileHandle.nullDevice
+            task.standardError = FileHandle.nullDevice
+            try? task.run()
+            NSApp.terminate(nil)
+        }
     }
 
     private static func q(_ path: String) -> String {
