@@ -76,11 +76,25 @@ class SnippetManager {
 
     // MARK: - Folder management
 
-    func addFolder(name: String) -> SnippetFolder {
-        let folder = SnippetFolder(name: name)
+    func addFolder(name: String, parentId: UUID? = nil) -> SnippetFolder {
+        let folder = SnippetFolder(name: name, parentId: parentId)
         folders.append(folder)
         save()
         return folder
+    }
+
+    func descendantFolderIds(of folderId: UUID) -> Set<UUID> {
+        var result = Set<UUID>()
+        var queue = [folderId]
+        while !queue.isEmpty {
+            let current = queue.removeFirst()
+            let children = folders.filter { $0.parentId == current }
+            for child in children {
+                result.insert(child.id)
+                queue.append(child.id)
+            }
+        }
+        return result
     }
 
     func renameFolder(id: UUID, newName: String) {
@@ -90,15 +104,25 @@ class SnippetManager {
         }
     }
 
-    /// Remove folder. If moveToRoot=true, affected snippets get folderId=nil; if false, they are deleted.
+    /// Remove folder and all its descendants. Snippets are moved to root or deleted.
     func removeFolder(id: UUID, moveToRoot: Bool) {
-        folders.removeAll { $0.id == id }
-        if moveToRoot {
-            for i in snippets.indices where snippets[i].folderId == id {
-                snippets[i].folderId = nil
+        var idsToRemove = [id]
+        var queue = [id]
+        while !queue.isEmpty {
+            let current = queue.removeFirst()
+            let children = folders.filter { $0.parentId == current }.map { $0.id }
+            idsToRemove.append(contentsOf: children)
+            queue.append(contentsOf: children)
+        }
+        for rid in idsToRemove {
+            folders.removeAll { $0.id == rid }
+            if moveToRoot {
+                for i in snippets.indices where snippets[i].folderId == rid {
+                    snippets[i].folderId = nil
+                }
+            } else {
+                snippets.removeAll { $0.folderId == rid }
             }
-        } else {
-            snippets.removeAll { $0.folderId == id }
         }
         save()
     }
@@ -108,7 +132,8 @@ class SnippetManager {
     func match(buffer: String) -> (trigger: String, expansion: String)? {
         let sorted = snippets.sorted { $0.trigger.count > $1.trigger.count }
         for snippet in sorted where !snippet.trigger.isEmpty && buffer.hasSuffix(snippet.trigger) {
-            return (snippet.trigger, DatePlaceholder.resolve(in: snippet.expansion))
+            let expanded = DateArithmetic.resolve(in: DatePlaceholder.resolve(in: snippet.expansion))
+            return (snippet.trigger, expanded)
         }
         return nil
     }

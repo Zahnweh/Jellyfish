@@ -1,6 +1,6 @@
 APP_NAME     := Jellyfish
-APP_VERSION  := 0.0.2
-BUILD_NUMBER := 2
+APP_VERSION  := 1.0
+BUILD_NUMBER := 3
 BUNDLE_ID    := de.extragroup.jellyfish
 ARCH         := $(shell uname -m)
 BUILD_DIR    := .build/$(ARCH)-apple-macosx/release
@@ -28,7 +28,12 @@ bundle:
 	cp "Sources/Jellyfish/StatusBarTemplate@2x.png" "$(CONTENTS)/Resources/"
 	cp "Sources/Jellyfish/snippets.json" "$(CONTENTS)/Resources/"
 	cp "Sources/Jellyfish/icon-clock.svg" "$(CONTENTS)/Resources/"
+	cp "Sources/Jellyfish/icon-calendar.svg" "$(CONTENTS)/Resources/"
+	cp "Sources/Jellyfish/icon-clipboard.svg" "$(CONTENTS)/Resources/"
+	cp "Sources/Jellyfish/icon-calculator.svg" "$(CONTENTS)/Resources/"
+	cp "Sources/Jellyfish/icon-optional.svg" "$(CONTENTS)/Resources/"
 	cp "Sources/Jellyfish/icon-dropdown.svg" "$(CONTENTS)/Resources/"
+	cp "Sources/Jellyfish/icon-condition.svg" "$(CONTENTS)/Resources/"
 
 	@sed \
 		-e 's/$$(APP_VERSION)/$(APP_VERSION)/g' \

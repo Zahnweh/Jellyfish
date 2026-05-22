@@ -8,7 +8,16 @@ final class SnippetPreviewWindowController: NSObject, NSWindowDelegate {
     private var completion: ((String) -> Void)?
     private var template: String = ""
     private var popups: [NSPopUpButton] = []
+    private var popupGroups: [Int?] = []   // parallel to popups
+    private var checkboxes: [NSButton] = []
+    private var optionalBlocks: [OptionalBlock] = []
     private weak var previewText: NSTextView?
+
+    private static let blockColorPalette: [NSColor] = [
+        .systemGreen, .systemBlue, .systemOrange,
+        .systemPurple, .systemTeal, .systemPink,
+    ]
+    private var optionalBlockColors: [NSColor] = []
 
     // MARK: - Public API
 
@@ -17,6 +26,10 @@ final class SnippetPreviewWindowController: NSObject, NSWindowDelegate {
         self.completion = completion
         self.template = expansion
         self.popups = []
+        self.popupGroups = []
+        self.checkboxes = []
+        self.optionalBlocks = []
+        self.optionalBlockColors = []
 
         let placeholders = DropdownPlaceholder.parse(in: expansion)
         let p = buildPanel(placeholders: placeholders)
@@ -29,8 +42,14 @@ final class SnippetPreviewWindowController: NSObject, NSWindowDelegate {
     // MARK: - Panel construction
 
     private func buildPanel(placeholders: [DropdownPlaceholder]) -> NSPanel {
+        let optionals = OptionalPlaceholder.parse(in: template)
+        self.optionalBlocks = optionals
+
+        let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let targetPanelW = floor(screenFrame.width * 0.5)
+        let targetPanelH = floor(screenFrame.height * 0.7)
         let pad: CGFloat = 20
-        let innerWidth: CGFloat = 380
+        let innerWidth: CGFloat = targetPanelW - pad * 2
         let labelColumnWidth: CGFloat = 80
 
         let content = NSView()
@@ -42,14 +61,14 @@ final class SnippetPreviewWindowController: NSObject, NSWindowDelegate {
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(titleLabel)
 
-        // Preview section header
+        // Preview header
         let previewHeader = NSTextField(labelWithString: "Vorschau:")
         previewHeader.font = NSFont.systemFont(ofSize: 11)
         previewHeader.textColor = .secondaryLabelColor
         previewHeader.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(previewHeader)
 
-        // Preview scroll + text view
+        // Preview text view
         let tv = NSTextView()
         tv.isEditable = false
         tv.isSelectable = false
@@ -69,6 +88,7 @@ final class SnippetPreviewWindowController: NSObject, NSWindowDelegate {
         sv.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(sv)
 
+        let svHeightConstraint = sv.heightAnchor.constraint(equalToConstant: 90)
         NSLayoutConstraint.activate([
             titleLabel.topAnchor.constraint(equalTo: content.topAnchor),
             titleLabel.leadingAnchor.constraint(equalTo: content.leadingAnchor),
@@ -80,26 +100,33 @@ final class SnippetPreviewWindowController: NSObject, NSWindowDelegate {
             sv.topAnchor.constraint(equalTo: previewHeader.bottomAnchor, constant: 4),
             sv.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             sv.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            sv.heightAnchor.constraint(equalToConstant: 90),
+            svHeightConstraint,
         ])
 
-        // Dropdown rows
         var prevAnchor = sv.bottomAnchor
         var prevGap: CGFloat = 14
 
+        // Dropdown rows
         for (i, ph) in placeholders.enumerated() {
-            let rowLabel = NSTextField(labelWithString: "Auswahl \(i + 1):")
+            let labelText = ph.groupId.map { "Gruppe \($0):" } ?? "Auswahl \(i + 1):"
+            let rowLabel = NSTextField(labelWithString: labelText)
             rowLabel.font = NSFont.systemFont(ofSize: 13)
             rowLabel.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview(rowLabel)
 
             let popup = NSPopUpButton()
-            popup.addItems(withTitles: ph.options)
             popup.translatesAutoresizingMaskIntoConstraints = false
             popup.target = self
-            popup.action = #selector(popupChanged)
+            popup.action = #selector(popupChanged(_:))
+            // Use NSMenu directly so duplicate option strings are not silently dropped
+            let menu = NSMenu()
+            for option in ph.options {
+                menu.addItem(NSMenuItem(title: option, action: nil, keyEquivalent: ""))
+            }
+            popup.menu = menu
             content.addSubview(popup)
             popups.append(popup)
+            popupGroups.append(ph.groupId)
 
             NSLayoutConstraint.activate([
                 rowLabel.topAnchor.constraint(equalTo: prevAnchor, constant: prevGap),
@@ -110,8 +137,51 @@ final class SnippetPreviewWindowController: NSObject, NSWindowDelegate {
                 popup.leadingAnchor.constraint(equalTo: rowLabel.trailingAnchor, constant: 8),
                 popup.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             ])
-
             prevAnchor = rowLabel.bottomAnchor
+            prevGap = 8
+        }
+
+        // Separator between dropdowns and optionals (only when both present)
+        if !optionals.isEmpty && !placeholders.isEmpty {
+            let sep = NSBox()
+            sep.boxType = .separator
+            sep.translatesAutoresizingMaskIntoConstraints = false
+            content.addSubview(sep)
+            NSLayoutConstraint.activate([
+                sep.topAnchor.constraint(equalTo: prevAnchor, constant: prevGap + 4),
+                sep.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+                sep.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+                sep.heightAnchor.constraint(equalToConstant: 1),
+            ])
+            prevAnchor = sep.bottomAnchor
+            prevGap = 10
+        }
+
+        // Optional block checkboxes
+        for (i, block) in optionals.enumerated() {
+            let blockColor = Self.blockColorPalette[i % Self.blockColorPalette.count]
+            optionalBlockColors.append(blockColor)
+            let cb = NSButton(checkboxWithTitle: "", target: self, action: #selector(checkboxChanged))
+            let titleAttrs: [NSAttributedString.Key: Any] = [
+                .foregroundColor: blockColor,
+                .font: NSFont.systemFont(ofSize: 13),
+            ]
+            cb.attributedTitle = NSAttributedString(string: block.label, attributes: titleAttrs)
+            // Group-bound blocks: initial state = index 0 in group
+            if let binding = block.groupBinding {
+                cb.state = binding.includedIndices.contains(0) ? .on : .off
+            } else {
+                cb.state = .on
+            }
+            cb.translatesAutoresizingMaskIntoConstraints = false
+            content.addSubview(cb)
+            checkboxes.append(cb)
+
+            NSLayoutConstraint.activate([
+                cb.topAnchor.constraint(equalTo: prevAnchor, constant: prevGap),
+                cb.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            ])
+            prevAnchor = cb.bottomAnchor
             prevGap = 8
         }
 
@@ -148,12 +218,13 @@ final class SnippetPreviewWindowController: NSObject, NSWindowDelegate {
             content.widthAnchor.constraint(equalToConstant: innerWidth),
         ])
 
-        // Size the panel by computing the content's fitting height
-        wrapper.frame = CGRect(x: 0, y: 0, width: innerWidth + pad * 2, height: 600)
+        wrapper.frame = CGRect(x: 0, y: 0, width: targetPanelW, height: 1200)
         wrapper.layoutSubtreeIfNeeded()
         let fittingH = content.fittingSize.height
-        let panelH = max(fittingH + pad * 2, 200)
-        let panelW = innerWidth + pad * 2
+        let extraH = max(targetPanelH - (fittingH + pad * 2), 0)
+        svHeightConstraint.constant += extraH
+        let panelH = max(fittingH + extraH + pad * 2, 300)
+        let panelW = targetPanelW
 
         let p = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: panelW, height: panelH),
@@ -172,14 +243,35 @@ final class SnippetPreviewWindowController: NSObject, NSWindowDelegate {
 
     // MARK: - Actions
 
-    @objc private func popupChanged() { updatePreview() }
+    @objc private func popupChanged(_ sender: NSPopUpButton) {
+        guard let senderIdx = popups.firstIndex(of: sender) else { updatePreview(); return }
+        let selectedIdx = sender.indexOfSelectedItem
+        // Only sync when this popup belongs to an explicit group (non-nil)
+        if let groupId = senderIdx < popupGroups.count ? popupGroups[senderIdx] : nil {
+            // Sync same-group popups
+            for (i, popup) in popups.enumerated() {
+                guard i != senderIdx else { continue }
+                let iGroup: Int? = i < popupGroups.count ? popupGroups[i] : nil
+                guard iGroup == groupId else { continue }
+                if selectedIdx < popup.numberOfItems { popup.selectItem(at: selectedIdx) }
+            }
+            // Sync group-bound checkboxes
+            for (i, block) in optionalBlocks.enumerated() {
+                guard let binding = block.groupBinding, binding.groupId == groupId else { continue }
+                checkboxes[safe: i]?.state = binding.includedIndices.contains(selectedIdx) ? .on : .off
+            }
+        }
+        updatePreview()
+    }
+    @objc private func checkboxChanged() { updatePreview() }
 
     @objc private func insert() {
-        let selections = popups.map { $0.selectedItem?.title ?? "" }
-        let resolved = DropdownPlaceholder.resolve(text: template, selections: selections)
+        let dropSelections = popups.map { $0.selectedItem?.title ?? "" }
+        let included = Set(checkboxes.indices.filter { checkboxes[$0].state == .on })
+        var resolved = DropdownPlaceholder.resolve(text: template, selections: dropSelections)
+        resolved = OptionalPlaceholder.resolve(text: resolved, included: included)
         let cb = completion
         dismiss()
-        // Short delay for panel close animation; original app stays active (non-activating panel)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             cb?(resolved)
         }
@@ -192,10 +284,14 @@ final class SnippetPreviewWindowController: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         completion = nil
         popups = []
+        popupGroups = []
+        checkboxes = []
+        optionalBlocks = []
+        optionalBlockColors = []
         AppDelegate.shared?.keyboardMonitor.ensureEnabled()
     }
 
-    // MARK: - Helpers
+    // MARK: - Preview
 
     private func updatePreview() {
         guard let storage = previewText?.textStorage else { return }
@@ -203,45 +299,82 @@ final class SnippetPreviewWindowController: NSObject, NSWindowDelegate {
     }
 
     private func buildHighlightedPreview() -> NSAttributedString {
-        let baseFont = NSFont.systemFont(ofSize: 13)
         let baseAttrs: [NSAttributedString.Key: Any] = [
-            .font: baseFont,
+            .font: NSFont.systemFont(ofSize: 13),
             .foregroundColor: NSColor.labelColor,
         ]
-        let highlightAttrs: [NSAttributedString.Key: Any] = [
+        let dropdownAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 13, weight: .medium),
             .foregroundColor: NSColor.controlAccentColor,
             .backgroundColor: NSColor.controlAccentColor.withAlphaComponent(0.12),
         ]
+        let dropdowns = DropdownPlaceholder.parse(in: template)
+        let optionals  = OptionalPlaceholder.parse(in: template)
+        let dropSel = popups.map { $0.selectedItem?.title ?? "" }
+        let included   = Set(checkboxes.indices.filter { checkboxes[$0].state == .on })
+
+        // Collect all special spans (range in template → attributed replacement).
+        // Search sequentially so duplicate rawValues map to the correct occurrence.
+        var spans: [(Range<String.Index>, NSAttributedString)] = []
+
+        var dropSearchFrom = template.startIndex
+        for (i, ph) in dropdowns.enumerated() {
+            if let r = template.range(of: ph.rawValue, range: dropSearchFrom..<template.endIndex) {
+                let chosen = i < dropSel.count ? dropSel[i] : (ph.options.first ?? "")
+                spans.append((r, NSAttributedString(string: chosen, attributes: dropdownAttrs)))
+                dropSearchFrom = r.upperBound
+            }
+        }
+        var optSearchFrom = template.startIndex
+        for (i, block) in optionals.enumerated() {
+            if let r = template.range(of: block.rawValue, range: optSearchFrom..<template.endIndex) {
+                let color = optionalBlockColors.indices.contains(i)
+                    ? optionalBlockColors[i] : .systemGreen
+                let includedAttrs: [NSAttributedString.Key: Any] = [
+                    .font: NSFont.systemFont(ofSize: 13),
+                    .foregroundColor: color,
+                    .backgroundColor: color.withAlphaComponent(0.12),
+                ]
+                let excludedAttrs: [NSAttributedString.Key: Any] = [
+                    .font: NSFont.systemFont(ofSize: 13),
+                    .foregroundColor: color.withAlphaComponent(0.45),
+                    .strikethroughStyle: NSUnderlineStyle.single.rawValue,
+                    .strikethroughColor: color.withAlphaComponent(0.45),
+                ]
+                let attrs = included.contains(i) ? includedAttrs : excludedAttrs
+                spans.append((r, NSAttributedString(string: block.content, attributes: attrs)))
+                optSearchFrom = r.upperBound
+            }
+        }
+        spans.sort { $0.0.lowerBound < $1.0.lowerBound }
 
         let result = NSMutableAttributedString()
-        var remaining = template
-        let placeholders = DropdownPlaceholder.parse(in: template)
-        let selections = popups.map { $0.selectedItem?.title ?? "" }
-
-        for (i, ph) in placeholders.enumerated() {
-            guard let range = remaining.range(of: ph.rawValue) else { continue }
-            let before = String(remaining[remaining.startIndex..<range.lowerBound])
-            if !before.isEmpty {
-                result.append(NSAttributedString(string: before, attributes: baseAttrs))
+        var pos = template.startIndex
+        for (range, rendered) in spans {
+            if pos < range.lowerBound {
+                result.append(NSAttributedString(string: String(template[pos..<range.lowerBound]),
+                                                  attributes: baseAttrs))
             }
-            let chosen = i < selections.count ? selections[i] : (ph.options.first ?? "")
-            if !chosen.isEmpty {
-                result.append(NSAttributedString(string: chosen, attributes: highlightAttrs))
-            }
-            remaining = String(remaining[range.upperBound...])
+            result.append(rendered)
+            pos = range.upperBound
         }
-        if !remaining.isEmpty {
-            result.append(NSAttributedString(string: remaining, attributes: baseAttrs))
+        if pos < template.endIndex {
+            result.append(NSAttributedString(string: String(template[pos...]), attributes: baseAttrs))
         }
         return result
     }
+
+    // MARK: - Helpers
 
     private func dismiss() {
         let p = panel
         panel = nil
         completion = nil
         popups = []
+        popupGroups = []
+        checkboxes = []
+        optionalBlocks = []
+        optionalBlockColors = []
         p?.close()
     }
 }

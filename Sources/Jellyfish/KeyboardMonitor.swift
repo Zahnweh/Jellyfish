@@ -129,16 +129,20 @@ class KeyboardMonitor {
                 let trigger = match.trigger
                 let expansion = match.expansion
                 DispatchQueue.main.async {
-                    if DropdownPlaceholder.hasPlaceholders(in: expansion) {
+                    // Resolve {ZWISCHENABLAGE} now, before paste() replaces the clipboard.
+                    let clipboardText = NSPasteboard.general.string(forType: .string) ?? ""
+                    let resolved = expansion.replacingOccurrences(of: "{ZWISCHENABLAGE}", with: clipboardText)
+
+                    if DropdownPlaceholder.hasPlaceholders(in: resolved) || OptionalPlaceholder.hasPlaceholders(in: resolved) {
                         self.deleteTrigger(trigger)
                         // Delay so the backspace events reach the target app before the panel takes key focus
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                            SnippetPreviewWindowController.shared.show(expansion: expansion) { [weak self] resolved in
-                                self?.paste(resolved)
+                            SnippetPreviewWindowController.shared.show(expansion: resolved) { [weak self] final in
+                                self?.paste(final)
                             }
                         }
                     } else {
-                        self.replace(trigger: trigger, with: expansion)
+                        self.replace(trigger: trigger, with: resolved)
                     }
                 }
             }
