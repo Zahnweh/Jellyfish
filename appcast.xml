@@ -8,7 +8,7 @@
         <item>
             <title>Jellyfish 1.0</title>
             <pubDate>Fri, 22 May 2026 10:00:00 +0200</pubDate>
-            <sparkle:version>3</sparkle:version>
+            <sparkle:version>4</sparkle:version>
             <sparkle:shortVersionString>1.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
             <description><![CDATA[
@@ -27,15 +27,15 @@
             ]]></description>
             <enclosure
                 url="https://github.com/Zahnweh/Jellyfish/releases/download/v1.0/Jellyfish-1.0.zip"
-                sparkle:edSignature="wavCpDpfzbURFBdN3vYGzUGIsX6SrRif/uRew+1+xOaYBa1E/iLRE+PXb9E/SNfuLyctSq7sLj5ZtAVnJlNfCA=="
-                length="18520834"
+                sparkle:edSignature="ddxfmxt2HPUwfoIIFrcQxnK17NZKDfKCOpiyXu67JPfCb9L6vzyDIy1Ip3T3EO+w9eqzEhnWdYuceRRrXwxDDw=="
+                length="18520832"
                 type="application/octet-stream"
             />
         </item>
         <item>
             <title>Jellyfish 0.0.2</title>
             <pubDate>Wed, 21 May 2026 14:31:00 +0000</pubDate>
-            <sparkle:version>3</sparkle:version>
+            <sparkle:version>2</sparkle:version>
             <sparkle:shortVersionString>0.0.2</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
             <description><![CDATA[
