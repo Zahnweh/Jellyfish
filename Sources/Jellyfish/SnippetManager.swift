@@ -74,6 +74,17 @@ class SnippetManager {
         }
     }
 
+    @discardableResult
+    func duplicate(_ snippet: Snippet) -> Snippet {
+        var copy = snippet
+        copy.id = UUID()
+        copy.name = snippet.name.isEmpty ? "" : snippet.name + " (Kopie)"
+        copy.trigger = ""
+        snippets.append(copy)
+        save()
+        return copy
+    }
+
     // MARK: - Folder management
 
     func addFolder(name: String, parentId: UUID? = nil) -> SnippetFolder {

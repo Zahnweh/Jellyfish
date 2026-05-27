@@ -500,6 +500,10 @@ final class SnippetListViewController: NSViewController {
 
         // Context menu
         let ctxMenu = NSMenu()
+        let duplicateItem = NSMenuItem(title: "Duplizieren", action: #selector(duplicateSelected), keyEquivalent: "")
+        duplicateItem.target = self
+        ctxMenu.addItem(duplicateItem)
+        ctxMenu.addItem(.separator())
         let deleteItem = NSMenuItem(title: "Löschen", action: #selector(deleteSelected), keyEquivalent: "")
         deleteItem.target = self
         ctxMenu.addItem(deleteItem)
@@ -641,6 +645,19 @@ final class SnippetListViewController: NSViewController {
         tableView.selectRowIndexes(IndexSet(integer: idx), byExtendingSelection: false)
         tableView.scrollRowToVisible(idx)
         // tableViewSelectionDidChange fires here → delegate?.snippetSelected(snippet)
+    }
+
+    @objc private func duplicateSelected() {
+        guard let snippet = selectedSnippet else { return }
+        let copy = SnippetManager.shared.duplicate(snippet)
+        let idx = filteredSnippets.count
+        filteredSnippets.append(copy)
+        tableView.insertRows(at: IndexSet(integer: idx), withAnimation: .slideDown)
+        updateDeleteButton()
+        tableView.selectRowIndexes(IndexSet(integer: idx), byExtendingSelection: false)
+        tableView.scrollRowToVisible(idx)
+        AppDelegate.shared?.statusBar.rebuild()
+        // tableViewSelectionDidChange fires here → delegate?.snippetSelected(copy)
     }
 }
 
