@@ -1,3 +1,11 @@
+## Jellyfish 1.1.1
+
+### Neu
+- **Textbausteine duplizieren**: Bestehende Snippets per Kontextmenü duplizieren
+
+### Verbesserungen
+- Fehlermeldung beim Auto-Update zeigt jetzt den genauen Grund an
+
 ## Jellyfish 1.0
 
 Erste stabile Version mit vollständigem Feature-Set.

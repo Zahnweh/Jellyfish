@@ -78,7 +78,8 @@ enum Updater {
         let isDMG = url.pathExtension.lowercased() == "dmg"
         URLSession.shared.downloadTask(with: url) { tempURL, _, error in
             guard let tempURL, error == nil else {
-                DispatchQueue.main.async { showError("Download fehlgeschlagen.") }
+                let detail = error?.localizedDescription ?? "Unbekannter Fehler"
+                DispatchQueue.main.async { showError("Download fehlgeschlagen.\n\n\(detail)") }
                 return
             }
             if isDMG {
