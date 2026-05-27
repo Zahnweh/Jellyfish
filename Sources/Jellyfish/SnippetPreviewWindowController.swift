@@ -7,7 +7,7 @@ final class SnippetPreviewWindowController: NSObject, NSWindowDelegate {
     private var panel: NSPanel?
     private var completion: ((String) -> Void)?
     private var template: String = ""
-    private var popups: [NSPopUpButton] = []
+    private var popups: [any DropdownControl] = []
     private var popupGroups: [Int?] = []   // parallel to popups
     private var checkboxes: [NSButton] = []
     private var optionalBlocks: [OptionalBlock] = []
@@ -114,18 +114,30 @@ final class SnippetPreviewWindowController: NSObject, NSWindowDelegate {
             rowLabel.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview(rowLabel)
 
-            let popup = NSPopUpButton()
-            popup.translatesAutoresizingMaskIntoConstraints = false
-            popup.target = self
-            popup.action = #selector(popupChanged(_:))
-            // Use NSMenu directly so duplicate option strings are not silently dropped
-            let menu = NSMenu()
-            for option in ph.options {
-                menu.addItem(NSMenuItem(title: option, action: nil, keyEquivalent: ""))
+            // Ab 10 Optionen: Suchfeld-Dropdown, darunter: klassisches Menü
+            let searchThreshold = 10
+            let dropControl: NSControl & DropdownControl
+            if ph.options.count > searchThreshold {
+                let btn = SearchablePopupButton(frame: .zero)
+                btn.bezelStyle = .rounded
+                btn.target = self
+                btn.action = #selector(popupChanged(_:))
+                btn.configure(options: ph.options)
+                dropControl = btn
+            } else {
+                let popup = NSPopUpButton()
+                let menu = NSMenu()
+                for option in ph.options {
+                    menu.addItem(NSMenuItem(title: option, action: nil, keyEquivalent: ""))
+                }
+                popup.menu = menu
+                popup.target = self
+                popup.action = #selector(popupChanged(_:))
+                dropControl = popup
             }
-            popup.menu = menu
-            content.addSubview(popup)
-            popups.append(popup)
+            dropControl.translatesAutoresizingMaskIntoConstraints = false
+            content.addSubview(dropControl)
+            popups.append(dropControl)
             popupGroups.append(ph.groupId)
 
             NSLayoutConstraint.activate([
@@ -133,9 +145,9 @@ final class SnippetPreviewWindowController: NSObject, NSWindowDelegate {
                 rowLabel.leadingAnchor.constraint(equalTo: content.leadingAnchor),
                 rowLabel.widthAnchor.constraint(equalToConstant: labelColumnWidth),
 
-                popup.centerYAnchor.constraint(equalTo: rowLabel.centerYAnchor),
-                popup.leadingAnchor.constraint(equalTo: rowLabel.trailingAnchor, constant: 8),
-                popup.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+                dropControl.centerYAnchor.constraint(equalTo: rowLabel.centerYAnchor),
+                dropControl.leadingAnchor.constraint(equalTo: rowLabel.trailingAnchor, constant: 8),
+                dropControl.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             ])
             prevAnchor = rowLabel.bottomAnchor
             prevGap = 8
@@ -243,22 +255,27 @@ final class SnippetPreviewWindowController: NSObject, NSWindowDelegate {
 
     // MARK: - Actions
 
-    @objc private func popupChanged(_ sender: NSPopUpButton) {
-        guard let senderIdx = popups.firstIndex(of: sender) else { updatePreview(); return }
-        let selectedIdx = sender.indexOfSelectedItem
-        // Only sync when this popup belongs to an explicit group (non-nil)
+    @objc private func popupChanged(_ sender: AnyObject) {
+        guard let senderIdx = popups.firstIndex(where: { $0 === sender }) else {
+            updatePreview(); return
+        }
+        let chosenTitle = popups[senderIdx].selectedTitle
+        // Sync: nur bei Gruppen-Dropdowns
         if let groupId = senderIdx < popupGroups.count ? popupGroups[senderIdx] : nil {
-            // Sync same-group popups
             for (i, popup) in popups.enumerated() {
                 guard i != senderIdx else { continue }
                 let iGroup: Int? = i < popupGroups.count ? popupGroups[i] : nil
                 guard iGroup == groupId else { continue }
-                if selectedIdx < popup.numberOfItems { popup.selectItem(at: selectedIdx) }
+                popup.selectOption(chosenTitle)
             }
-            // Sync group-bound checkboxes
-            for (i, block) in optionalBlocks.enumerated() {
-                guard let binding = block.groupBinding, binding.groupId == groupId else { continue }
-                checkboxes[safe: i]?.state = binding.includedIndices.contains(selectedIdx) ? .on : .off
+            // Gruppen-gebundene Checkboxen synchronisieren
+            // Wir brauchen den Index der gewählten Option in der Original-Liste
+            if let ph = DropdownPlaceholder.parse(in: template)[safe: senderIdx],
+               let selIdx = ph.options.firstIndex(of: chosenTitle) {
+                for (i, block) in optionalBlocks.enumerated() {
+                    guard let binding = block.groupBinding, binding.groupId == groupId else { continue }
+                    checkboxes[safe: i]?.state = binding.includedIndices.contains(selIdx) ? .on : .off
+                }
             }
         }
         updatePreview()
@@ -266,7 +283,7 @@ final class SnippetPreviewWindowController: NSObject, NSWindowDelegate {
     @objc private func checkboxChanged() { updatePreview() }
 
     @objc private func insert() {
-        let dropSelections = popups.map { $0.selectedItem?.title ?? "" }
+        let dropSelections = popups.map { $0.selectedTitle }
         let included = Set(checkboxes.indices.filter { checkboxes[$0].state == .on })
         var resolved = DropdownPlaceholder.resolve(text: template, selections: dropSelections)
         resolved = OptionalPlaceholder.resolve(text: resolved, included: included)
@@ -310,7 +327,7 @@ final class SnippetPreviewWindowController: NSObject, NSWindowDelegate {
         ]
         let dropdowns = DropdownPlaceholder.parse(in: template)
         let optionals  = OptionalPlaceholder.parse(in: template)
-        let dropSel = popups.map { $0.selectedItem?.title ?? "" }
+        let dropSel = popups.map { $0.selectedTitle }
         let included   = Set(checkboxes.indices.filter { checkboxes[$0].state == .on })
 
         // Collect all special spans (range in template → attributed replacement).
