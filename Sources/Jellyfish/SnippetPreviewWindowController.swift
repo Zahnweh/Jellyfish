@@ -306,6 +306,8 @@ final class SnippetPreviewWindowController: NSObject, NSWindowDelegate {
         optionalBlocks = []
         optionalBlockColors = []
         AppDelegate.shared?.keyboardMonitor.ensureEnabled()
+        SearchablePopupButton.activePickerPanel?.close()
+        SearchablePopupButton.activePickerPanel = nil
     }
 
     // MARK: - Preview

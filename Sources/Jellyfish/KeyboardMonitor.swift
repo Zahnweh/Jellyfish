@@ -88,10 +88,43 @@ class KeyboardMonitor {
 
         guard type == .keyDown else { return Unmanaged.passRetained(event) }
 
-        // Kein Matching während das Editor-Fenster fokussiert ist – sonst würden
-        // Eingaben im Textfeld versehentlich als Snippets expandiert.
+        // Kein Matching während das Jellyfish-Panel offen ist.
         if NSApp.keyWindow != nil {
             buffer = ""
+            // Picker geöffnet: Event direkt ans floating NSPanel senden.
+            // NSEvent(cgEvent:) hat im Tap kein gültiges characters-Feld
+            // (CGEventKeyboardGetUnicodeString ist im Tap unzuverlässig).
+            // Deshalb: für druckbare Zeichen ein vollständiges NSEvent via
+            // NSEvent.keyEvent(...) aufbauen; für Sondertasten CGEvent direkt.
+            if let pickerPanel = SearchablePopupButton.activePickerPanel {
+                let keyCode   = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
+                let flags     = event.flags
+                let modifiers = NSEvent.ModifierFlags(rawValue: UInt(flags.rawValue))
+                let winNum    = pickerPanel.windowNumber
+                let ts        = ProcessInfo.processInfo.systemUptime
+
+                if let ch = unicodeChar(from: event) {
+                    // Druckbares Zeichen: NSEvent mit korrektem characters-Feld
+                    let s = String(ch)
+                    if let nsEvent = NSEvent.keyEvent(
+                        with: .keyDown, location: .zero,
+                        modifierFlags: modifiers, timestamp: ts,
+                        windowNumber: winNum, context: nil,
+                        characters: s, charactersIgnoringModifiers: s,
+                        isARepeat: false, keyCode: keyCode) {
+                        DispatchQueue.main.async { pickerPanel.sendEvent(nsEvent) }
+                    }
+                } else {
+                    // Sondertaste (Delete, Enter, Escape, Pfeile): CGEvent direkt
+                    let retained = Unmanaged.passRetained(event)
+                    DispatchQueue.main.async {
+                        if let nsEvent = NSEvent(cgEvent: retained.takeRetainedValue()) {
+                            pickerPanel.sendEvent(nsEvent)
+                        }
+                    }
+                }
+                return nil
+            }
             return Unmanaged.passRetained(event)
         }
 
@@ -121,10 +154,7 @@ class KeyboardMonitor {
             if buffer.count > maxBuffer {
                 buffer = String(buffer.suffix(maxBuffer))
             }
-            NSLog("[HotKey] Buffer: '%@'", buffer)
-
             if let match = SnippetManager.shared.match(buffer: buffer) {
-                NSLog("[HotKey] Treffer: '%@' → '%@'", match.trigger, match.expansion)
                 buffer = ""
                 let trigger = match.trigger
                 let expansion = match.expansion

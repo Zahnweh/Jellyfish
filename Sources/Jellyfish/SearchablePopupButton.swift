@@ -17,14 +17,16 @@ extension NSPopUpButton: DropdownControl {
 
 /// Ersatz für NSPopUpButton bei Dropdowns mit vielen Einträgen.
 /// Zeigt einen Button mit der aktuellen Auswahl – ein Klick öffnet
-/// ein Popover mit Suchfeld + gefilterter Liste.
+/// ein schwebendes NSPanel mit Suchfeld + gefilterter Liste.
+/// NSPanel mit isFloatingPanel=true empfängt Keyboard-Input auch wenn
+/// die App nicht aktiv ist (anders als NSPopover / _NSPopoverWindow).
 final class SearchablePopupButton: NSButton, DropdownControl {
 
-    // Schwelle ab der das Suchfeld angezeigt wird (immer, da SearchablePopupButton
-    // nur für große Menüs instanziiert wird)
+    // Wird von SnippetPreviewWindowController beim Panel-Schließen aufgerufen.
+    static weak var activePickerPanel: NSPanel?
+
     private var allOptions: [String] = []
     private(set) var selectedTitle: String = ""
-    private var popover: NSPopover?
 
     func configure(options: [String]) {
         allOptions = options
@@ -39,40 +41,66 @@ final class SearchablePopupButton: NSButton, DropdownControl {
     }
 
     private func refreshLabel() {
-        // Schriftbild wie NSPopUpButton (Systemschrift, kein Fettdruck)
-        let display = selectedTitle.isEmpty ? "Auswählen" : selectedTitle
-        title = display
+        title = selectedTitle.isEmpty ? "Auswählen" : selectedTitle
     }
 
-    // NSButton löst mouseDown für .momentaryPushIn BezelStyle nicht über
-    // target/action aus – wir überschreiben es direkt.
     override func mouseDown(with event: NSEvent) {
         openPicker()
     }
 
     private func openPicker() {
-        popover?.close()
+        SearchablePopupButton.activePickerPanel?.close()
+        SearchablePopupButton.activePickerPanel = nil
+
+        guard let buttonWindow = window else { return }
+
+        let pickerW: CGFloat = max(bounds.width, 340)
+        let pickerH: CGFloat = 260
+
+        // Picker direkt unterhalb des Buttons positionieren
+        let buttonInWindow = convert(bounds, to: nil)
+        let buttonOnScreen = buttonWindow.convertToScreen(buttonInWindow)
+        let pickerOrigin = NSPoint(
+            x: buttonOnScreen.minX,
+            y: buttonOnScreen.minY - pickerH
+        )
+
+        let picker = NSPanel(
+            contentRect: NSRect(origin: pickerOrigin, size: CGSize(width: pickerW, height: pickerH)),
+            styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        picker.isFloatingPanel          = true
+        picker.level                    = .floating
+        picker.hasShadow                = true
+        picker.isOpaque                 = true
+        picker.backgroundColor          = .windowBackgroundColor
+        picker.isReleasedWhenClosed     = false
+        // Titelleiste verstecken, aber .titled behalten damit das Panel Key-Window werden kann
+        picker.titleVisibility          = .hidden
+        picker.titlebarAppearsTransparent = true
+        picker.title                    = ""
+
         let vc = SearchPickerViewController(
             options: allOptions,
             selected: selectedTitle
-        ) { [weak self] chosen in
+        ) { [weak self, weak picker] chosen in
             guard let self else { return }
             self.selectedTitle = chosen
             self.refreshLabel()
-            self.popover?.close()
-            self.popover = nil
-            // Gleicher target/action-Mechanismus wie NSPopUpButton
+            SearchablePopupButton.activePickerPanel = nil
+            picker?.close()
             if let t = self.target, let a = self.action {
                 _ = t.perform(a, with: self)
             }
         }
-        let pop = NSPopover()
-        pop.contentViewController = vc
-        pop.behavior = .semitransient
-        pop.show(relativeTo: bounds, of: self, preferredEdge: .minY)
-        self.popover = pop
-        // Sofort Suchfeld fokussieren
-        vc.focusSearch()
+        picker.contentViewController = vc
+        SearchablePopupButton.activePickerPanel = picker
+        picker.makeKeyAndOrderFront(nil)
+        DispatchQueue.main.async { [weak picker, weak vc] in
+            picker?.makeFirstResponder(vc?.searchField)
+        }
     }
 }
 
@@ -85,7 +113,7 @@ private final class SearchPickerViewController: NSViewController,
     private var filtered: [String]
     private let onSelect: (String) -> Void
 
-    private var searchField: NSSearchField!
+    fileprivate var searchField: NSSearchField!
     private var tableView: NSTableView!
 
     init(options: [String], selected: String, onSelect: @escaping (String) -> Void) {
@@ -95,6 +123,12 @@ private final class SearchPickerViewController: NSViewController,
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError() }
+
+    // Escape: Picker schließen ohne Auswahl zu ändern
+    override func cancelOperation(_ sender: Any?) {
+        view.window?.close()
+        SearchablePopupButton.activePickerPanel = nil
+    }
 
     override func loadView() {
         let container = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: 260))
@@ -158,10 +192,6 @@ private final class SearchPickerViewController: NSViewController,
 
         self.view = container
         self.preferredContentSize = NSSize(width: 340, height: 260)
-    }
-
-    func focusSearch() {
-        view.window?.makeFirstResponder(searchField)
     }
 
     // MARK: - Suche
@@ -232,9 +262,8 @@ private final class SearchPickerViewController: NSViewController,
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) {
-        // Einfachklick in Tabelle → direkt übernehmen
-        let row = tableView.selectedRow
-        guard row >= 0, row < filtered.count else { return }
-        onSelect(filtered[row])
+        // Nur visuelles Highlighting – Auswahl erst bei Enter/Doppelklick bestätigen.
+        // Hier KEIN onSelect(), sonst schließt sich der Picker beim programmatischen
+        // selectRowIndexes(0) in controlTextDidChange.
     }
 }
