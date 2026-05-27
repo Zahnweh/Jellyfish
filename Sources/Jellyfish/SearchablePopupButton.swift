@@ -54,14 +54,13 @@ final class SearchablePopupButton: NSButton, DropdownControl {
 
         guard let buttonWindow = window else { return }
 
-        let pickerW: CGFloat = max(bounds.width, 340)
+        // Breite = Elternfenster; X = linksbündig mit Elternfenster; Y = unterhalb des Buttons
+        let pickerW: CGFloat = buttonWindow.frame.width
         let pickerH: CGFloat = 260
-
-        // Picker direkt unterhalb des Buttons positionieren
         let buttonInWindow = convert(bounds, to: nil)
         let buttonOnScreen = buttonWindow.convertToScreen(buttonInWindow)
         let pickerOrigin = NSPoint(
-            x: buttonOnScreen.minX,
+            x: buttonWindow.frame.minX,
             y: buttonOnScreen.minY - pickerH
         )
 
@@ -84,7 +83,8 @@ final class SearchablePopupButton: NSButton, DropdownControl {
 
         let vc = SearchPickerViewController(
             options: allOptions,
-            selected: selectedTitle
+            selected: selectedTitle,
+            width: pickerW
         ) { [weak self, weak picker] chosen in
             guard let self else { return }
             self.selectedTitle = chosen
@@ -112,14 +112,16 @@ private final class SearchPickerViewController: NSViewController,
     private let allOptions: [String]
     private var filtered: [String]
     private let onSelect: (String) -> Void
+    private let panelWidth: CGFloat
 
     fileprivate var searchField: NSSearchField!
     private var tableView: NSTableView!
 
-    init(options: [String], selected: String, onSelect: @escaping (String) -> Void) {
-        self.allOptions = options
-        self.filtered   = options
-        self.onSelect   = onSelect
+    init(options: [String], selected: String, width: CGFloat = 400, onSelect: @escaping (String) -> Void) {
+        self.allOptions  = options
+        self.filtered    = options
+        self.onSelect    = onSelect
+        self.panelWidth  = width
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError() }
@@ -131,7 +133,7 @@ private final class SearchPickerViewController: NSViewController,
     }
 
     override func loadView() {
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: 260))
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: panelWidth, height: 260))
         container.translatesAutoresizingMaskIntoConstraints = false
 
         // Suchfeld
@@ -186,12 +188,12 @@ private final class SearchPickerViewController: NSViewController,
             scroll.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             scroll.bottomAnchor.constraint(equalTo: container.bottomAnchor),
 
-            container.widthAnchor.constraint(equalToConstant: 340),
+            container.widthAnchor.constraint(equalToConstant: panelWidth),
             container.heightAnchor.constraint(equalToConstant: 260),
         ])
 
         self.view = container
-        self.preferredContentSize = NSSize(width: 340, height: 260)
+        self.preferredContentSize = NSSize(width: panelWidth, height: 260)
     }
 
     // MARK: - Suche
