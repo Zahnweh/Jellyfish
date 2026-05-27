@@ -1246,6 +1246,23 @@ class SnippetEditorWindowController: NSObject, NSWindowDelegate {
         fileMenu.addItem(NSMenuItem(title: "Schließen",
                                     action: #selector(NSWindow.performClose(_:)),
                                     keyEquivalent: "w"))
+        fileMenu.addItem(.separator())
+        let importItem = NSMenuItem(title: "Importieren…",
+                                    action: #selector(importCSVAction),
+                                    keyEquivalent: "")
+        importItem.target = self
+        fileMenu.addItem(importItem)
+        let importTEItem = NSMenuItem(title: "TextExpander importieren…",
+                                      action: #selector(importTextExpanderAction),
+                                      keyEquivalent: "")
+        importTEItem.target = self
+        fileMenu.addItem(importTEItem)
+        fileMenu.addItem(.separator())
+        let exportItem = NSMenuItem(title: "Exportieren…",
+                                    action: #selector(exportCSVAction),
+                                    keyEquivalent: "")
+        exportItem.target = self
+        fileMenu.addItem(exportItem)
         fileItem.submenu = fileMenu
 
         let editItem = NSMenuItem(); mainMenu.addItem(editItem)
@@ -1268,6 +1285,53 @@ class SnippetEditorWindowController: NSObject, NSWindowDelegate {
 
     @objc func showPreferences() {
         PreferencesWindowController.shared.show()
+    }
+
+    // MARK: - Import / Export
+
+    @objc private func importCSVAction() {
+        showManageMode()
+        guard let w = window else { return }
+        ImportExportController.runImport(convertTextExpander: false, window: w) { [weak self] folderId in
+            self?.reloadAfterImport(selectFolderId: folderId)
+        }
+    }
+
+    @objc private func importTextExpanderAction() {
+        showManageMode()
+        guard let w = window else { return }
+        ImportExportController.runImport(convertTextExpander: true, window: w) { [weak self] folderId in
+            self?.reloadAfterImport(selectFolderId: folderId)
+        }
+    }
+
+    @objc private func exportCSVAction() {
+        showManageMode()
+        guard let w = window else { return }
+
+        // Aktuell sichtbare Bausteine (abhängig von Ordnerauswahl)
+        let currentFolderId = listVC.currentFolderId
+        let allSnippets = SnippetManager.shared.snippets
+        let toExport: [Snippet]
+        let suggestedName: String
+
+        if let fid = currentFolderId {
+            let descendants = SnippetManager.shared.descendantFolderIds(of: fid)
+            toExport = allSnippets.filter { $0.folderId == fid || descendants.contains($0.folderId ?? UUID()) }
+            suggestedName = SnippetManager.shared.folders.first(where: { $0.id == fid })?.name ?? "Bausteine"
+        } else {
+            toExport = allSnippets
+            suggestedName = "Alle-Bausteine"
+        }
+
+        ImportExportController.runExport(snippets: toExport, suggestedName: suggestedName, window: w)
+    }
+
+    private func reloadAfterImport(selectFolderId: UUID?) {
+        folderVC.reload()
+        listVC.currentFolderId = selectFolderId
+        listVC.reload()
+        AppDelegate.shared?.statusBar.rebuild()
     }
 
     private func buildWindow() {

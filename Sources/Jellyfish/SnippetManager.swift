@@ -57,6 +57,11 @@ class SnippetManager {
         save()
     }
 
+    func batchAdd(_ newSnippets: [Snippet]) {
+        snippets.append(contentsOf: newSnippets)
+        save()
+    }
+
     func remove(at index: Int) {
         snippets.remove(at: index)
         save()
