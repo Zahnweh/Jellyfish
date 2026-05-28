@@ -58,6 +58,9 @@ dmg: release
 	hdiutil convert "build/$(APP_NAME)_rw.dmg" -format UDZO -o "$(DMG_NAME)" && \
 	rm -f "build/$(APP_NAME)_rw.dmg"
 	@echo "✅ $(DMG_NAME) erstellt"
+	@pkill $(APP_NAME) 2>/dev/null || true
+	cp -R "$(APP_BUNDLE)" /Applications/
+	@echo "✅ /Applications/$(APP_NAME).app aktualisiert"
 
 # ── Install ────────────────────────────────────────────────────────────────────
 install: release
