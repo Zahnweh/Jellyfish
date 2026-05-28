@@ -223,6 +223,13 @@ final class PreferencesWindowController: NSObject {
         openFolderPanel(
             message: "Wähle den Ordner, in dem Jellyfish deine eigenen Snippets synchronisiert."
         ) { [weak self] url in
+            if url.standardizedFileURL == SnippetManager.shared.teamFolderURL?.standardizedFileURL {
+                self?.showConflictAlert(
+                    "Persönlicher Sync-Ordner kann nicht der Team-Ordner sein",
+                    info: "Wähle einen anderen Ordner für deinen persönlichen Sync, " +
+                          "sonst überschreiben sich persönliche und geteilte Snippets gegenseitig.")
+                return
+            }
             SnippetManager.shared.setSyncFolder(url)
             self?.updateSyncUI()
         }
@@ -244,6 +251,13 @@ final class PreferencesWindowController: NSObject {
         openFolderPanel(
             message: "Wähle den gemeinsamen Ordner für Team-Snippets (z. B. ein geteilter Dropbox-Ordner)."
         ) { [weak self] url in
+            if url.standardizedFileURL == SnippetManager.shared.syncFolderURL?.standardizedFileURL {
+                self?.showConflictAlert(
+                    "Team-Ordner kann nicht der persönliche Sync-Ordner sein",
+                    info: "Wähle einen anderen Ordner für den Team-Sync, " +
+                          "sonst überschreiben sich persönliche und geteilte Snippets gegenseitig.")
+                return
+            }
             SnippetManager.shared.setTeamFolder(url)
             self?.updateSyncUI()
             NotificationCenter.default.post(name: .snippetsDidReloadExternally, object: nil)
@@ -262,6 +276,16 @@ final class PreferencesWindowController: NSObject {
     }
 
     // MARK: - Helpers
+
+    private func showConflictAlert(_ title: String, info: String) {
+        guard let w = window else { return }
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = info
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.beginSheetModal(for: w) { _ in }
+    }
 
     private func openFolderPanel(message: String, completion: @escaping (URL) -> Void) {
         let panel = NSOpenPanel()
