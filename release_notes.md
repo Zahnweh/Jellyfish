@@ -1,3 +1,8 @@
+## Jellyfish 2.1
+
+### Bugfixes
+- Warnung beim Versuch, persönlichen Sync-Ordner und Team-Ordner auf denselben Pfad zu setzen — verhindert doppelte JSON-Dateien im geteilten Ordner
+
 ## Jellyfish 2.0
 
 ### Neu

@@ -1,6 +1,6 @@
 APP_NAME     := Jellyfish
-APP_VERSION  := 2.0
-BUILD_NUMBER := 8
+APP_VERSION  := 2.1
+BUILD_NUMBER := 9
 BUNDLE_ID    := de.extragroup.jellyfish
 ARCH         := $(shell uname -m)
 BUILD_DIR    := .build/$(ARCH)-apple-macosx/release
