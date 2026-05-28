@@ -6,7 +6,6 @@ final class DropdownOptionsSheetController: NSViewController {
     private var options: [String] = []
     private var tableView: NSTableView!
     private var removeButton: NSButton!
-    private var groupField: NSTextField!
 
     // MARK: - Setup
 
@@ -15,7 +14,7 @@ final class DropdownOptionsSheetController: NSViewController {
     }
 
     override func loadView() {
-        view = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 330))
+        view = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 300))
     }
 
     override func viewDidLoad() {
@@ -28,30 +27,10 @@ final class DropdownOptionsSheetController: NSViewController {
     // MARK: - Build UI
 
     private func buildUI() {
-        // Title label inside the sheet (sheets have no visible title bar on macOS)
         let titleLabel = NSTextField(labelWithString: "Dropdown-Optionen")
         titleLabel.font = NSFont.boldSystemFont(ofSize: 13)
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(titleLabel)
-
-        // Group row
-        let groupLabel = NSTextField(labelWithString: "Gruppe:")
-        groupLabel.font = NSFont.systemFont(ofSize: 12)
-        groupLabel.textColor = .secondaryLabelColor
-        groupLabel.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(groupLabel)
-
-        groupField = NSTextField()
-        groupField.placeholderString = "optional, z. B. 1"
-        groupField.font = NSFont.systemFont(ofSize: 12)
-        groupField.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(groupField)
-
-        let groupHint = NSTextField(labelWithString: "Gleiche Nummer = Auswahl wird synchronisiert")
-        groupHint.font = NSFont.systemFont(ofSize: 10)
-        groupHint.textColor = .tertiaryLabelColor
-        groupHint.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(groupHint)
 
         // Table view
         tableView = NSTableView()
@@ -99,7 +78,6 @@ final class DropdownOptionsSheetController: NSViewController {
         toolbar.addSubview(removeButton)
         view.addSubview(toolbar)
 
-        // Action buttons
         let cancelButton = NSButton(title: "Abbrechen", target: self, action: #selector(cancel))
         cancelButton.bezelStyle = .rounded
         cancelButton.keyEquivalent = "\u{1B}"
@@ -116,19 +94,7 @@ final class DropdownOptionsSheetController: NSViewController {
             titleLabel.topAnchor.constraint(equalTo: view.topAnchor, constant: 16),
             titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
 
-            groupLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 10),
-            groupLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            groupLabel.widthAnchor.constraint(equalToConstant: 60),
-
-            groupField.centerYAnchor.constraint(equalTo: groupLabel.centerYAnchor),
-            groupField.leadingAnchor.constraint(equalTo: groupLabel.trailingAnchor, constant: 6),
-            groupField.widthAnchor.constraint(equalToConstant: 80),
-
-            groupHint.centerYAnchor.constraint(equalTo: groupLabel.centerYAnchor),
-            groupHint.leadingAnchor.constraint(equalTo: groupField.trailingAnchor, constant: 8),
-            groupHint.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-
-            scrollView.topAnchor.constraint(equalTo: groupLabel.bottomAnchor, constant: 8),
+            scrollView.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 10),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
             scrollView.bottomAnchor.constraint(equalTo: toolbar.topAnchor),
@@ -200,15 +166,13 @@ final class DropdownOptionsSheetController: NSViewController {
         let valid = options
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
-        let groupId = Int(groupField.stringValue.trimmingCharacters(in: .whitespaces))
         presentingViewController?.dismiss(self)
-        if !valid.isEmpty { onApply?(valid, groupId) }
+        if !valid.isEmpty { onApply?(valid, nil) }
     }
 
     // MARK: - Helpers
 
     private func commitActiveEdit() {
-        // Read back any in-progress text field values before acting
         for row in 0..<tableView.numberOfRows {
             if let cell = tableView.view(atColumn: 0, row: row, makeIfNecessary: false) as? NSTableCellView,
                let tf = cell.textField, row < options.count {

@@ -1169,7 +1169,6 @@ final class SnippetEditorViewController: NSViewController {
 
         let sheet = OptionalBlockSheetController()
         sheet.selectedText = selectedText
-        sheet.expansionText = expansionView.string
         sheet.onApply = { [weak self] placeholder in
             guard let self = self else { return }
             self.expansionView.insertText(placeholder, replacementRange: sel)
@@ -1179,12 +1178,13 @@ final class SnippetEditorViewController: NSViewController {
     }
 
     @objc private func showDropdownDialog() {
+        let insertRange = expansionView.selectedRange()
         let sheet = DropdownOptionsSheetController()
         sheet.configure(initialOptions: [])
         sheet.onApply = { [weak self] options, groupId in
             guard let self = self else { return }
             let placeholder = DropdownPlaceholder.make(options: options, groupId: groupId)
-            self.expansionView.insertText(placeholder, replacementRange: self.expansionView.selectedRange())
+            self.expansionView.insertText(placeholder, replacementRange: insertRange)
             self.saveCurrentSnippet()
         }
         presentAsSheet(sheet)

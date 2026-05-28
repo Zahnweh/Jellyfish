@@ -1,3 +1,13 @@
+## Jellyfish 2.1.1
+
+### Bugfixes
+- Optionaler Block: Text erscheint jetzt korrekt in der Vorschau, wenn die Checkbox aktiviert ist
+- Dropdown-Dialog: Einfüge-Position wird beim Öffnen des Dialogs gespeichert — verhindert, dass ein zweites Dropdown das erste überschreibt
+
+### Verbesserungen
+- Dialog „Optionaler Block": Beschriftung von „Label" auf „Text" geändert, mehrzeiliges Eingabefeld für längere Texte, veraltete Dropdown-Gruppen-Verknüpfung entfernt
+- Dropdown-Dialog: Gruppen-Feld entfernt (Bedingte Texte sind über den f(x)-Dialog verfügbar)
+
 ## Jellyfish 2.1
 
 ### Bugfixes

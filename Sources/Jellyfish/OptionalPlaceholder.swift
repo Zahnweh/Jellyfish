@@ -49,7 +49,8 @@ struct OptionalPlaceholder {
                 }
             }
 
-            results.append(OptionalBlock(label: label, content: content, rawValue: rawValue, groupBinding: groupBinding))
+            let effectiveContent = content.isEmpty ? label : content
+            results.append(OptionalBlock(label: label, content: effectiveContent, rawValue: rawValue, groupBinding: groupBinding))
             searchStart = closeRange.upperBound
         }
         return results
