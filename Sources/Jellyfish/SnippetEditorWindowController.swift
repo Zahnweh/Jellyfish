@@ -68,11 +68,53 @@ final class TriggerPillView: NSView {
 final class FolderItem {
     let folderId: UUID?
     let name: String
+    let isShared: Bool
     var children: [FolderItem] = []
 
-    init(folderId: UUID?, name: String) {
+    init(folderId: UUID?, name: String, isShared: Bool = false) {
         self.folderId = folderId
         self.name = name
+        self.isShared = isShared
+    }
+}
+
+// MARK: - Folder cell with optional team-share icon
+
+private final class FolderCellView: NSTableCellView {
+    private let shareIcon = NSImageView()
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        let tf = NSTextField(labelWithString: "")
+        tf.translatesAutoresizingMaskIntoConstraints = false
+        tf.lineBreakMode = .byTruncatingTail
+        addSubview(tf)
+        textField = tf
+
+        shareIcon.image = NSImage(systemSymbolName: "person.2.fill",
+                                  accessibilityDescription: "Geteilt mit Team")
+        shareIcon.contentTintColor = .tertiaryLabelColor
+        shareIcon.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(shareIcon)
+
+        NSLayoutConstraint.activate([
+            shareIcon.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            shareIcon.centerYAnchor.constraint(equalTo: centerYAnchor),
+            shareIcon.widthAnchor.constraint(equalToConstant: 15),
+            shareIcon.heightAnchor.constraint(equalToConstant: 12),
+
+            tf.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
+            tf.trailingAnchor.constraint(equalTo: shareIcon.leadingAnchor, constant: -4),
+            tf.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func configure(name: String, isAll: Bool, isShared: Bool) {
+        textField?.stringValue = name
+        textField?.font = isAll ? .systemFont(ofSize: 13, weight: .medium) : .systemFont(ofSize: 13)
+        shareIcon.isHidden = !isShared
     }
 }
 
@@ -196,6 +238,9 @@ final class FolderViewController: NSViewController {
         let renameItem = NSMenuItem(title: "Umbenennen",
                                     action: #selector(renameSelected), keyEquivalent: "")
         renameItem.target = self
+        let shareItem = NSMenuItem(title: "Mit Team teilen",
+                                   action: #selector(toggleShared), keyEquivalent: "")
+        shareItem.target = self
         let deleteItem = NSMenuItem(title: "Löschen",
                                     action: #selector(removeFolder), keyEquivalent: "")
         deleteItem.target = self
@@ -203,6 +248,9 @@ final class FolderViewController: NSViewController {
         let menu = NSMenu()
         menu.addItem(subfolderItem)
         menu.addItem(renameItem)
+        menu.addItem(.separator())
+        menu.addItem(shareItem)
+        menu.addItem(.separator())
         menu.addItem(deleteItem)
         menu.delegate = self
         outlineView.menu = menu
@@ -226,7 +274,7 @@ final class FolderViewController: NSViewController {
     private func buildTree() {
         let folders = SnippetManager.shared.folders
         var items: [UUID: FolderItem] = [:]
-        for f in folders { items[f.id] = FolderItem(folderId: f.id, name: f.name) }
+        for f in folders { items[f.id] = FolderItem(folderId: f.id, name: f.name, isShared: f.isShared) }
         var topLevel: [FolderItem] = []
         for f in folders {
             guard let item = items[f.id] else { continue }
@@ -334,6 +382,14 @@ final class FolderViewController: NSViewController {
         }
     }
 
+    @objc private func toggleShared() {
+        guard let item = outlineView.item(atRow: outlineView.selectedRow) as? FolderItem,
+              let folderId = item.folderId else { return }
+        SnippetManager.shared.toggleShared(folderId: folderId)
+        reload()
+        delegate?.folderSelectionChanged()
+    }
+
     @objc private func renameSelected() {
         guard let item = outlineView.item(atRow: outlineView.selectedRow) as? FolderItem,
               let folderId = item.folderId,
@@ -377,27 +433,16 @@ extension FolderViewController: NSOutlineViewDataSource, NSOutlineViewDelegate {
                      viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
         let fi = item as! FolderItem
         let id = NSUserInterfaceItemIdentifier("FolderCell")
-        let cell: NSTableCellView
-        if let existing = outlineView.makeView(withIdentifier: id, owner: self) as? NSTableCellView {
+        let cell: FolderCellView
+        if let existing = outlineView.makeView(withIdentifier: id, owner: self) as? FolderCellView {
             cell = existing
         } else {
-            cell = NSTableCellView()
+            cell = FolderCellView()
             cell.identifier = id
-            let tf = NSTextField(labelWithString: "")
-            tf.translatesAutoresizingMaskIntoConstraints = false
-            tf.lineBreakMode = .byTruncatingTail
-            cell.addSubview(tf)
-            cell.textField = tf
-            NSLayoutConstraint.activate([
-                tf.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2),
-                tf.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -4),
-                tf.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-            ])
         }
-        cell.textField?.stringValue = fi.folderId == nil ? "Alle" : fi.name
-        cell.textField?.font = fi.folderId == nil
-            ? .systemFont(ofSize: 13, weight: .medium)
-            : .systemFont(ofSize: 13)
+        cell.configure(name: fi.folderId == nil ? "Alle" : fi.name,
+                       isAll: fi.folderId == nil,
+                       isShared: fi.isShared)
         return cell
     }
 
@@ -435,8 +480,22 @@ extension FolderViewController: NSOutlineViewDataSource, NSOutlineViewDelegate {
 extension FolderViewController: NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         let row = outlineView.selectedRow
-        let isFolder = row >= 0 && (outlineView.item(atRow: row) as? FolderItem)?.folderId != nil
-        menu.items.forEach { $0.isEnabled = isFolder }
+        guard let fi = outlineView.item(atRow: row) as? FolderItem,
+              let _ = fi.folderId else {
+            menu.items.forEach { $0.isEnabled = false }
+            return
+        }
+        let hasTeamFolder = SnippetManager.shared.teamFolderURL != nil
+        for item in menu.items {
+            if item.action == #selector(toggleShared) {
+                item.isEnabled = hasTeamFolder
+                item.title = fi.isShared ? "Nicht mehr mit Team teilen" : "Mit Team teilen"
+            } else if item.isSeparatorItem {
+                // keep separators as-is
+            } else {
+                item.isEnabled = true
+            }
+        }
     }
 }
 
@@ -1164,6 +1223,22 @@ class SnippetEditorWindowController: NSObject, NSWindowDelegate {
     private var folderVC: FolderViewController!
     private var listVC: SnippetListViewController!
     private var editorVC: SnippetEditorViewController!
+
+    override init() {
+        super.init()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(reloadFromExternalChange),
+            name: .snippetsDidReloadExternally,
+            object: nil
+        )
+    }
+
+    @objc private func reloadFromExternalChange() {
+        guard window != nil else { return }
+        folderVC?.reload()
+        listVC?.reload()
+    }
 
     func showAddMode() {
         present()

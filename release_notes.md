@@ -1,3 +1,24 @@
+## Jellyfish 2.0
+
+### Neu
+- **Cloud-Synchronisation**: Snippets über iCloud Drive, Dropbox oder einen beliebigen Cloud-Dienst auf allen eigenen Geräten synchronisieren — einstellbar unter Einstellungen → Persönlicher Sync
+- **Team-Sharing**: Einzelne Ordner selektiv mit dem Team teilen — Team-Sync-Ordner in den Einstellungen konfigurieren, dann per Rechtsklick auf einen Ordner → „Mit Team teilen". Geteilte Ordner sind in der Sidebar mit einem Team-Icon gekennzeichnet
+- **Auto-Reload**: Jellyfish erkennt Änderungen durch andere Geräte oder Teammitglieder und aktualisiert die Snippet-Liste automatisch im Hintergrund, ohne Neustart
+
+## Jellyfish 1.6
+
+### Neu
+- **Suchfeld-Dropdown**: Optionslisten mit mehr als 10 Einträgen erhalten automatisch ein Suchfeld
+
+### Bugfixes
+- Picker-Breite passt sich dynamisch der Fensterbreite an
+
+## Jellyfish 1.5
+
+### Neu
+- **CSV-Import/Export**: Snippets als CSV exportieren und importieren
+- **TextExpander-Import**: TextExpander-Gruppen direkt importieren
+
 ## Jellyfish 1.1.1
 
 ### Neu
