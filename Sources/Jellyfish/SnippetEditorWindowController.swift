@@ -842,6 +842,12 @@ final class SnippetEditorViewController: NSViewController {
     private var dropdownButton: NSButton!
     private var conditionButton: NSButton!
     private var iconToolbar: NSView!
+    private var formattingBar: NSView!
+    private var formattingBarHeight: NSLayoutConstraint!
+    private var boldButton: NSButton!
+    private var italicButton: NSButton!
+    private var underlineButton: NSButton!
+    private var linkButton: NSButton!
     private var noSelectionOverlay: NSTextField!
 
     // Flag to suppress saving while we're programmatically populating fields
@@ -906,7 +912,9 @@ final class SnippetEditorViewController: NSViewController {
 
         contentTypePopup = NSPopUpButton()
         contentTypePopup.addItem(withTitle: "Reiner Text")
-        contentTypePopup.isEnabled = false
+        contentTypePopup.addItem(withTitle: "Formatierter Text")
+        contentTypePopup.target = self
+        contentTypePopup.action = #selector(contentTypeChanged)
         contentTypePopup.translatesAutoresizingMaskIntoConstraints = false
         formContainer.addSubview(contentTypePopup)
 
@@ -956,6 +964,42 @@ final class SnippetEditorViewController: NSViewController {
         triggerField.translatesAutoresizingMaskIntoConstraints = false
         triggerField.delegate = self
         formContainer.addSubview(triggerField)
+
+        // Formatting toolbar (only visible in rich text mode)
+        boldButton = makeFormatButton(symbol: "bold", tooltip: "Fett", action: #selector(boldAction))
+        italicButton = makeFormatButton(symbol: "italic", tooltip: "Kursiv", action: #selector(italicAction))
+        underlineButton = makeFormatButton(symbol: "underline", tooltip: "Unterstrichen", action: #selector(underlineAction))
+        linkButton = makeFormatButton(symbol: "link", tooltip: "Link einfügen", action: #selector(linkAction))
+
+        formattingBar = NSView()
+        formattingBar.translatesAutoresizingMaskIntoConstraints = false
+        formattingBar.addSubview(boldButton)
+        formattingBar.addSubview(italicButton)
+        formattingBar.addSubview(underlineButton)
+        formattingBar.addSubview(linkButton)
+        formContainer.addSubview(formattingBar)
+
+        let fmtButtons: [NSButton] = [boldButton, italicButton, underlineButton, linkButton]
+        for (i, btn) in fmtButtons.enumerated() {
+            let leading: NSLayoutConstraint = i == 0
+                ? btn.leadingAnchor.constraint(equalTo: formattingBar.leadingAnchor)
+                : btn.leadingAnchor.constraint(equalTo: fmtButtons[i - 1].trailingAnchor, constant: 2)
+            NSLayoutConstraint.activate([
+                leading,
+                btn.centerYAnchor.constraint(equalTo: formattingBar.centerYAnchor),
+                btn.widthAnchor.constraint(equalToConstant: 28),
+                btn.heightAnchor.constraint(equalToConstant: 24),
+            ])
+        }
+
+        formattingBarHeight = formattingBar.heightAnchor.constraint(equalToConstant: 0)
+        NSLayoutConstraint.activate([
+            formattingBar.topAnchor.constraint(equalTo: contentTypeLabel.bottomAnchor, constant: 8),
+            formattingBar.leadingAnchor.constraint(equalTo: formContainer.leadingAnchor),
+            formattingBar.trailingAnchor.constraint(equalTo: formContainer.trailingAnchor),
+            formattingBarHeight,
+        ])
+        formattingBar.isHidden = true
 
         // Icon toolbar between content type row and text editor
         calendarButton = makeIconButton(resource: "icon-calendar", tooltip: "Datum einfügen",
@@ -1019,7 +1063,7 @@ final class SnippetEditorViewController: NSViewController {
             contentTypePopup.leadingAnchor.constraint(equalTo: contentTypeLabel.trailingAnchor, constant: 8),
             contentTypePopup.widthAnchor.constraint(equalToConstant: 140),
 
-            iconToolbar.topAnchor.constraint(equalTo: contentTypeLabel.bottomAnchor, constant: 8),
+            iconToolbar.topAnchor.constraint(equalTo: formattingBar.bottomAnchor, constant: 0),
 
             expansionScrollView.topAnchor.constraint(equalTo: iconToolbar.bottomAnchor, constant: 4),
             expansionScrollView.leadingAnchor.constraint(equalTo: formContainer.leadingAnchor),
@@ -1061,12 +1105,17 @@ final class SnippetEditorViewController: NSViewController {
 
     func showEmpty() {
         noSelectionOverlay.isHidden = false
+        expansionView.isRichText = false
+        expansionView.font = NSFont.systemFont(ofSize: 13)
+        expansionView.textColor = .labelColor
         expansionView.string = ""
         expansionView.isEditable = false
         nameField.stringValue = ""
         nameField.isEditable = false
         triggerField.stringValue = ""
         triggerField.isEditable = false
+        contentTypePopup.selectItem(at: 0)
+        setFormattingBarVisible(false)
         setToolbarEnabled(false)
         currentSnippet = nil
     }
@@ -1085,11 +1134,161 @@ final class SnippetEditorViewController: NSViewController {
         [calendarButton, timestampButton, clipboardButton, calculatorButton,
          optionalButton, dropdownButton, conditionButton]
             .forEach { $0?.isEnabled = enabled }
+        [boldButton, italicButton, underlineButton, linkButton]
+            .forEach { $0?.isEnabled = enabled }
+        contentTypePopup?.isEnabled = enabled
+    }
+
+    private func setFormattingBarVisible(_ visible: Bool) {
+        formattingBar.isHidden = !visible
+        formattingBarHeight.constant = visible ? 28 : 0
+    }
+
+    private func makeFormatButton(symbol: String, tooltip: String, action: Selector) -> NSButton {
+        let btn = NSButton(title: "", target: self, action: action)
+        btn.bezelStyle = .inline
+        btn.isBordered = false
+        btn.toolTip = tooltip
+        if let img = NSImage(systemSymbolName: symbol, accessibilityDescription: tooltip) {
+            btn.image = img
+        }
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        return btn
+    }
+
+    @objc private func contentTypeChanged() {
+        guard !isPopulating else { return }
+        let wantsRich = contentTypePopup.indexOfSelectedItem == 1
+        if wantsRich {
+            let plain = expansionView.string
+            expansionView.isRichText = true
+            expansionView.textColor = .labelColor
+            let attrStr = NSAttributedString(string: plain, attributes: [
+                .font: NSFont.systemFont(ofSize: 13),
+                .foregroundColor: NSColor.labelColor,
+            ])
+            expansionView.textStorage?.setAttributedString(attrStr)
+            setFormattingBarVisible(true)
+            saveCurrentSnippet()
+        } else {
+            guard let window = view.window else { return }
+            if (expansionView.textStorage?.length ?? 0) > 0 {
+                let alert = NSAlert()
+                alert.messageText = "Formatierung verwerfen?"
+                alert.informativeText = "Beim Wechsel zu reinem Text gehen alle Formatierungen verloren."
+                alert.addButton(withTitle: "Wechseln")
+                alert.addButton(withTitle: "Abbrechen")
+                alert.beginSheetModal(for: window) { [weak self] response in
+                    guard let self else { return }
+                    if response == .alertFirstButtonReturn {
+                        self.applyPlainTextMode()
+                    } else {
+                        self.contentTypePopup.selectItem(at: 1)
+                    }
+                }
+            } else {
+                applyPlainTextMode()
+            }
+        }
+    }
+
+    private func applyPlainTextMode() {
+        let plain = expansionView.string
+        expansionView.isRichText = false
+        expansionView.string = plain
+        expansionView.font = NSFont.systemFont(ofSize: 13)
+        expansionView.textColor = .labelColor
+        setFormattingBarVisible(false)
+        saveCurrentSnippet()
+    }
+
+    @objc private func boldAction() {
+        toggleFontTrait(.boldFontMask)
+    }
+
+    @objc private func italicAction() {
+        toggleFontTrait(.italicFontMask)
+    }
+
+    private func toggleFontTrait(_ trait: NSFontTraitMask) {
+        guard let storage = expansionView.textStorage else { return }
+        let range = expansionView.selectedRange()
+        guard range.length > 0 else { return }
+        var hasTrait = false
+        storage.enumerateAttribute(.font, in: range, options: []) { value, _, _ in
+            if let f = value as? NSFont, NSFontManager.shared.traits(of: f).contains(trait) {
+                hasTrait = true
+            }
+        }
+        storage.beginEditing()
+        storage.enumerateAttribute(.font, in: range, options: []) { value, subRange, _ in
+            let font = (value as? NSFont) ?? NSFont.systemFont(ofSize: 13)
+            let newFont = hasTrait
+                ? NSFontManager.shared.convert(font, toNotHaveTrait: trait)
+                : NSFontManager.shared.convert(font, toHaveTrait: trait)
+            storage.addAttribute(.font, value: newFont, range: subRange)
+        }
+        storage.endEditing()
+        saveCurrentSnippet()
+    }
+
+    @objc private func underlineAction() {
+        guard let storage = expansionView.textStorage else { return }
+        let range = expansionView.selectedRange()
+        guard range.length > 0 else { return }
+        let hasUnderline = storage.attribute(.underlineStyle, at: range.location, effectiveRange: nil) != nil
+        storage.beginEditing()
+        if hasUnderline {
+            storage.removeAttribute(.underlineStyle, range: range)
+        } else {
+            storage.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: range)
+        }
+        storage.endEditing()
+        saveCurrentSnippet()
+    }
+
+    @objc private func linkAction() {
+        let range = expansionView.selectedRange()
+        guard range.length > 0, let window = view.window else { return }
+        let alert = NSAlert()
+        alert.messageText = "Link einfügen"
+        alert.addButton(withTitle: "Einfügen")
+        alert.addButton(withTitle: "Abbrechen")
+        let urlField = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
+        urlField.placeholderString = "https://..."
+        alert.accessoryView = urlField
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard response == .alertFirstButtonReturn,
+                  let self,
+                  let url = URL(string: urlField.stringValue.trimmingCharacters(in: .whitespaces))
+            else { return }
+            self.expansionView.textStorage?.addAttributes([
+                .link: url,
+                .foregroundColor: NSColor.linkColor,
+                .underlineStyle: NSUnderlineStyle.single.rawValue,
+            ], range: range)
+            self.saveCurrentSnippet()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { urlField.becomeFirstResponder() }
     }
 
     private func populate(_ snippet: Snippet) {
         isPopulating = true
-        expansionView.string = snippet.expansion
+        if let rtf = snippet.expansionRTF,
+           let attrStr = NSAttributedString(rtf: rtf, documentAttributes: nil) {
+            expansionView.isRichText = true
+            expansionView.textColor = .labelColor
+            expansionView.textStorage?.setAttributedString(attrStr)
+            contentTypePopup.selectItem(at: 1)
+            setFormattingBarVisible(true)
+        } else {
+            expansionView.isRichText = false
+            expansionView.string = snippet.expansion
+            expansionView.font = NSFont.systemFont(ofSize: 13)
+            expansionView.textColor = .labelColor
+            contentTypePopup.selectItem(at: 0)
+            setFormattingBarVisible(false)
+        }
         nameField.stringValue = snippet.name
         triggerField.stringValue = snippet.trigger
         isPopulating = false
@@ -1098,6 +1297,12 @@ final class SnippetEditorViewController: NSViewController {
     private func saveCurrentSnippet() {
         guard !isPopulating, var snippet = currentSnippet else { return }
         snippet.expansion = expansionView.string
+        if expansionView.isRichText, let storage = expansionView.textStorage {
+            snippet.expansionRTF = storage.rtf(from: NSRange(location: 0, length: storage.length),
+                                                documentAttributes: [:])
+        } else {
+            snippet.expansionRTF = nil
+        }
         snippet.name = nameField.stringValue
         snippet.trigger = triggerField.stringValue.trimmingCharacters(in: .whitespaces)
         currentSnippet = snippet

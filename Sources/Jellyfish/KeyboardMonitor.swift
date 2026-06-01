@@ -158,18 +158,53 @@ class KeyboardMonitor {
                 buffer = ""
                 let trigger = match.trigger
                 let expansion = match.expansion
+                let rtf = match.rtf
                 DispatchQueue.main.async {
-                    // Resolve {ZWISCHENABLAGE} now, before paste() replaces the clipboard.
+                    // Zwischenablage jetzt lesen, bevor paste() sie überschreibt
                     let clipboardText = NSPasteboard.general.string(forType: .string) ?? ""
+
+                    if let rtfData = rtf {
+                        guard let attrStr = NSAttributedString(rtf: rtfData, documentAttributes: nil) else {
+                            self.replace(trigger: trigger, with: expansion); return
+                        }
+                        let mutable = NSMutableAttributedString(attributedString: attrStr)
+                        self.resolveStaticPlaceholders(in: mutable, clipboardText: clipboardText)
+
+                        if DropdownPlaceholder.hasPlaceholders(in: mutable.string)
+                            || OptionalPlaceholder.hasPlaceholders(in: mutable.string) {
+                            let resolvedPlain = expansion.replacingOccurrences(of: "{ZWISCHENABLAGE}", with: clipboardText)
+                            self.deleteTrigger(trigger)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                                SnippetPreviewWindowController.shared.show(
+                                    expansion: resolvedPlain, rtfAttrStr: mutable
+                                ) { [weak self] final, resolvedAttrStr in
+                                    if let resolvedAttrStr {
+                                        self?.paste(attrStr: resolvedAttrStr, plainFallback: final)
+                                    } else {
+                                        self?.paste(final)
+                                    }
+                                }
+                            }
+                        } else {
+                            let plain = mutable.string
+                            self.deleteTrigger(trigger)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                self.paste(attrStr: mutable, plainFallback: plain)
+                            }
+                        }
+                        return
+                    }
+
+                    // Plain text
                     let resolved = expansion.replacingOccurrences(of: "{ZWISCHENABLAGE}", with: clipboardText)
 
                     if DropdownPlaceholder.hasPlaceholders(in: resolved) || OptionalPlaceholder.hasPlaceholders(in: resolved) {
                         self.deleteTrigger(trigger)
                         // Delay so the backspace events reach the target app before the panel takes key focus
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                            SnippetPreviewWindowController.shared.show(expansion: resolved) { [weak self] final in
-                                self?.paste(final)
-                            }
+                            SnippetPreviewWindowController.shared.show(expansion: resolved) { [weak self] final, _ in
+                                    self?.paste(final)
+                                }
                         }
                     } else {
                         self.replace(trigger: trigger, with: resolved)
@@ -193,6 +228,103 @@ class KeyboardMonitor {
         }
     }
 
+    private func linkURL(from attrs: [NSAttributedString.Key: Any]) -> URL? {
+        if let u = attrs[.link] as? URL    { return u }
+        if let u = attrs[.link] as? NSURL  { return u as URL }
+        if let s = attrs[.link] as? String { return URL(string: s) }
+        return nil
+    }
+
+    private func simpleHTML(from attrStr: NSAttributedString) -> Data? {
+        var fragment = ""
+        attrStr.enumerateAttributes(in: NSRange(location: 0, length: attrStr.length), options: []) { attrs, range, _ in
+            var text = (attrStr.string as NSString).substring(with: range)
+            text = text.replacingOccurrences(of: "&", with: "&amp;")
+                       .replacingOccurrences(of: "<", with: "&lt;")
+                       .replacingOccurrences(of: ">", with: "&gt;")
+                       .replacingOccurrences(of: "\n", with: "<br>")
+            if let url = linkURL(from: attrs) {
+                fragment += "<a href=\"\(url.absoluteString)\">\(text)</a>"
+                return
+            }
+            var open = ""; var close = ""
+            if let font = attrs[.font] as? NSFont {
+                let traits = NSFontManager.shared.traits(of: font)
+                if traits.contains(.boldFontMask)   { open += "<strong>"; close = "</strong>" + close }
+                if traits.contains(.italicFontMask) { open += "<em>";     close = "</em>"     + close }
+            }
+            if attrs[.underlineStyle] != nil { open += "<u>"; close = "</u>" + close }
+            fragment += open + text + close
+        }
+        // Wenn der Inhalt NUR ein Link ist (kein umgebender Text), in <p> einwickeln
+        // damit TinyMCE es als Rich-Content behandelt und nicht als nackten URL-Paste ignoriert
+        let isOnlyLink = fragment.hasPrefix("<a ") && fragment.hasSuffix("</a>") && !fragment.dropFirst(3).contains("<a ")
+        let body = isOnlyLink ? "<p>\(fragment)</p>" : fragment
+        return "<meta charset=\"UTF-8\">\(body)".data(using: .utf8)
+    }
+
+    private func paste(attrStr: NSMutableAttributedString, plainFallback: String) {
+        let range = NSRange(location: 0, length: attrStr.length)
+        let rtfData  = attrStr.rtf(from: range, documentAttributes: [:])
+        let htmlData = simpleHTML(from: attrStr)
+        let pb = NSPasteboard.general
+        let htmlUTI  = NSPasteboard.PasteboardType("public.html")
+        let htmlMIME = NSPasteboard.PasteboardType("text/html")
+        let prevString = pb.string(forType: .string)
+        let prevRTF    = pb.data(forType: .rtf)
+        let prevHTML   = pb.data(forType: htmlUTI)
+
+        pb.clearContents()
+        if let rtf  = rtfData  { pb.setData(rtf,  forType: .rtf) }
+        if let html = htmlData {
+            pb.setData(html, forType: htmlUTI)
+            pb.setData(html, forType: htmlMIME)
+        }
+        pb.setString(plainFallback, forType: .string)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            self.postKey(keyCode: 9, keyDown: true, flags: .maskCommand)
+            self.postKey(keyCode: 9, keyDown: false, flags: .maskCommand)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                pb.clearContents()
+                if let prev = prevRTF    { pb.setData(prev, forType: .rtf) }
+                if let prev = prevHTML   { pb.setData(prev, forType: htmlUTI) }
+                if let prev = prevString { pb.setString(prev, forType: .string) }
+            }
+        }
+    }
+
+    private func paste(rtf: Data, plainFallback: String) {
+        let pb = NSPasteboard.general
+        let previousString = pb.string(forType: .string)
+        let previousRTF = pb.data(forType: .rtf)
+        let htmlType = NSPasteboard.PasteboardType("public.html")
+        let previousHTML = pb.data(forType: htmlType)
+
+        pb.clearContents()
+        pb.setData(rtf, forType: .rtf)
+        pb.setString(plainFallback, forType: .string)
+
+        // HTML für Browser und Web-Editoren (z.B. WordPress)
+        if let attrStr = NSAttributedString(rtf: rtf, documentAttributes: nil),
+           let htmlData = simpleHTML(from: attrStr) {
+            pb.setData(htmlData, forType: htmlType)
+            pb.setData(htmlData, forType: NSPasteboard.PasteboardType("text/html"))
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            self.postKey(keyCode: 9, keyDown: true, flags: .maskCommand)
+            self.postKey(keyCode: 9, keyDown: false, flags: .maskCommand)
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                pb.clearContents()
+                if let prev = previousRTF { pb.setData(prev, forType: .rtf) }
+                if let prev = previousHTML { pb.setData(prev, forType: htmlType) }
+                if let prev = previousString { pb.setString(prev, forType: .string) }
+            }
+        }
+    }
+
     private func paste(_ text: String) {
         let pb = NSPasteboard.general
         let previous = pb.string(forType: .string)
@@ -207,6 +339,39 @@ class KeyboardMonitor {
                 pb.clearContents()
                 if let prev = previous { pb.setString(prev, forType: .string) }
             }
+        }
+    }
+
+    // MARK: - RTF static placeholder resolution
+
+    private func replaceAll(_ placeholder: String, with value: String, in attrStr: NSMutableAttributedString) {
+        while true {
+            let found = (attrStr.string as NSString).range(of: placeholder)
+            guard found.location != NSNotFound else { break }
+            attrStr.replaceCharacters(in: found, with: value)
+        }
+    }
+
+    private func resolveStaticPlaceholders(in attrStr: NSMutableAttributedString, clipboardText: String) {
+        replaceAll("{ZWISCHENABLAGE}", with: clipboardText, in: attrStr)
+        let now = Date()
+        for ph in DatePlaceholder.allCases {
+            replaceAll(ph.rawValue, with: ph.resolve(at: now), in: attrStr)
+        }
+        guard attrStr.string.contains("{RECHNUNG|"),
+              let regex = try? NSRegularExpression(pattern: #"\{RECHNUNG\|([^}]+)\}"#) else { return }
+        while true {
+            let str = attrStr.string
+            guard let match = regex.firstMatch(in: str, range: NSRange(str.startIndex..., in: str)) else { break }
+            guard let innerRange = Range(match.range(at: 1), in: str) else { break }
+            let parts = str[innerRange].split(separator: "|", maxSplits: 2).map(String.init)
+            guard parts.count == 3,
+                  let amount = Int(parts[0]),
+                  let unit = DateArithmeticUnit(rawValue: parts[1]),
+                  let ph = DatePlaceholder.allCases.first(where: { $0.displayName == parts[2] }),
+                  let newDate = Calendar.current.date(byAdding: unit.calendarComponent, value: amount, to: now)
+            else { attrStr.deleteCharacters(in: match.range); continue }
+            attrStr.replaceCharacters(in: match.range, with: ph.resolve(at: newDate))
         }
     }
 

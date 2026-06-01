@@ -5,9 +5,10 @@ final class OptionalBlockSheetController: NSViewController {
     var selectedText: String = ""
 
     private var textView: NSTextView!
+    private var defaultOnCheckbox: NSButton!
 
     override func loadView() {
-        view = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 185))
+        view = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 220))
     }
 
     override func viewDidLoad() {
@@ -48,6 +49,11 @@ final class OptionalBlockSheetController: NSViewController {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(scrollView)
 
+        defaultOnCheckbox = NSButton(checkboxWithTitle: "Standardmäßig aktiv", target: nil, action: nil)
+        defaultOnCheckbox.state = .on
+        defaultOnCheckbox.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(defaultOnCheckbox)
+
         let cancelButton = NSButton(title: "Abbrechen", target: self, action: #selector(cancel))
         cancelButton.bezelStyle = .rounded
         cancelButton.keyEquivalent = "\u{1B}"
@@ -72,7 +78,10 @@ final class OptionalBlockSheetController: NSViewController {
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -pad),
             scrollView.heightAnchor.constraint(equalToConstant: 90),
 
-            okButton.topAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: 14),
+            defaultOnCheckbox.topAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: 10),
+            defaultOnCheckbox.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: pad),
+
+            okButton.topAnchor.constraint(equalTo: defaultOnCheckbox.bottomAnchor, constant: 10),
             okButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -pad),
             okButton.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -pad),
 
@@ -93,7 +102,8 @@ final class OptionalBlockSheetController: NSViewController {
             textView.window?.makeFirstResponder(textView)
             return
         }
-        let result = "{optional:\(text)}{/optional}"
+        let prefix = defaultOnCheckbox.state == .on ? "" : "off:"
+        let result = "{optional:\(prefix)\(text)}{/optional}"
         presentingViewController?.dismiss(self)
         onApply?(result)
     }

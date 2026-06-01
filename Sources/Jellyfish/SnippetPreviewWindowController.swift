@@ -5,8 +5,9 @@ final class SnippetPreviewWindowController: NSObject, NSWindowDelegate {
     private override init() {}
 
     private var panel: NSPanel?
-    private var completion: ((String) -> Void)?
+    private var completion: ((String, NSMutableAttributedString?) -> Void)?
     private var template: String = ""
+    private var templateAttrStr: NSMutableAttributedString?
     private var popups: [any DropdownControl] = []
     private var popupGroups: [Int?] = []   // parallel to popups
     private var checkboxes: [NSButton] = []
@@ -21,10 +22,12 @@ final class SnippetPreviewWindowController: NSObject, NSWindowDelegate {
 
     // MARK: - Public API
 
-    func show(expansion: String, completion: @escaping (String) -> Void) {
+    func show(expansion: String, rtfAttrStr: NSMutableAttributedString? = nil,
+              completion: @escaping (String, NSMutableAttributedString?) -> Void) {
         panel?.close()
         self.completion = completion
         self.template = expansion
+        self.templateAttrStr = rtfAttrStr
         self.popups = []
         self.popupGroups = []
         self.checkboxes = []
@@ -179,11 +182,11 @@ final class SnippetPreviewWindowController: NSObject, NSWindowDelegate {
                 .font: NSFont.systemFont(ofSize: 13),
             ]
             cb.attributedTitle = NSAttributedString(string: block.label, attributes: titleAttrs)
-            // Group-bound blocks: initial state = index 0 in group
+            // Group-bound blocks: initial state = index 0 in group; others use defaultEnabled
             if let binding = block.groupBinding {
                 cb.state = binding.includedIndices.contains(0) ? .on : .off
             } else {
-                cb.state = .on
+                cb.state = block.defaultEnabled ? .on : .off
             }
             cb.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview(cb)
@@ -287,10 +290,73 @@ final class SnippetPreviewWindowController: NSObject, NSWindowDelegate {
         let included = Set(checkboxes.indices.filter { checkboxes[$0].state == .on })
         var resolved = DropdownPlaceholder.resolve(text: template, selections: dropSelections)
         resolved = OptionalPlaceholder.resolve(text: resolved, included: included)
+
+        if let attrStr = templateAttrStr {
+            resolveDropdowns(in: attrStr, selections: dropSelections)
+            resolveOptionals(in: attrStr, included: included)
+        }
+
         let cb = completion
+        let resolvedAttrStr = templateAttrStr
         dismiss()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            cb?(resolved)
+            cb?(resolved, resolvedAttrStr)
+        }
+    }
+
+    // MARK: - RTF placeholder resolution helpers
+
+    private func replaceAll(_ placeholder: String, with value: String, in attrStr: NSMutableAttributedString) {
+        while true {
+            let found = (attrStr.string as NSString).range(of: placeholder)
+            guard found.location != NSNotFound else { break }
+            attrStr.replaceCharacters(in: found, with: value)
+        }
+    }
+
+    private func resolveDropdowns(in attrStr: NSMutableAttributedString, selections: [String]) {
+        let placeholders = DropdownPlaceholder.parse(in: attrStr.string)
+        for (i, ph) in placeholders.enumerated().reversed() {
+            guard i < selections.count else { continue }
+            let found = (attrStr.string as NSString).range(of: ph.rawValue)
+            guard found.location != NSNotFound else { continue }
+            let selection = selections[i]
+
+            if let url = URL(string: selection), url.scheme == "https" || url.scheme == "http" {
+                // Lesbaren Anzeige-Text aus dem URL-Pfad ableiten.
+                // Wichtig: Anzeige-Text muss sich von der href-URL unterscheiden,
+                // damit RTF-Leser (z.B. TinyMCE) den Link korrekt als Hyperlink erkennen.
+                let slug = url.pathComponents.filter { $0 != "/" && !$0.isEmpty }.last ?? ""
+                let displayText = slug.isEmpty ? selection : slug.replacingOccurrences(of: "-", with: " ")
+                attrStr.replaceCharacters(in: found, with: displayText)
+                let linkRange = NSRange(location: found.location, length: (displayText as NSString).length)
+                attrStr.addAttributes([
+                    .link: url,
+                    .foregroundColor: NSColor.linkColor,
+                    .underlineStyle: NSUnderlineStyle.single.rawValue,
+                ], range: linkRange)
+            } else {
+                attrStr.replaceCharacters(in: found, with: selection)
+            }
+        }
+    }
+
+    private func resolveOptionals(in attrStr: NSMutableAttributedString, included: Set<Int>) {
+        let blocks = OptionalPlaceholder.parse(in: attrStr.string)
+        for (i, block) in blocks.enumerated().reversed() {
+            let found = (attrStr.string as NSString).range(of: block.rawValue)
+            guard found.location != NSNotFound else { continue }
+            if included.contains(i) {
+                // Schließenden Tag entfernen (zuerst, da höherer Index)
+                let closeLen = OptionalPlaceholder.closeTag.count
+                let closeRange = NSRange(location: found.location + found.length - closeLen, length: closeLen)
+                attrStr.deleteCharacters(in: closeRange)
+                // Öffnenden Tag entfernen
+                let openLen = block.rawValue.count - block.content.count - closeLen
+                attrStr.deleteCharacters(in: NSRange(location: found.location, length: openLen))
+            } else {
+                attrStr.deleteCharacters(in: found)
+            }
         }
     }
 

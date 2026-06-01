@@ -1,3 +1,13 @@
+## Jellyfish 2.2
+
+### Neu
+- **Formatierter Text**: Textbausteine können jetzt als „Formatierter Text" angelegt werden — mit Fett, Kursiv, Unterstrichen und Links. Umschalten über das „Inhaltstyp"-Dropdown im Editor
+- **Optionaler Block: Standard-Zustand**: Beim Anlegen eines optionalen Blocks kann jetzt festgelegt werden, ob er im Vorschau-Dialog standardmäßig aktiv oder inaktiv ist (`{optional:off:Label}` für default-aus)
+
+### Verbesserungen
+- Alle Platzhalter (Datum, Uhrzeit, Rechnung, Zwischenablage, Dropdown, optionale Blöcke) funktionieren jetzt auch in formatierten Textbausteinen
+- URL-Dropdowns fügen Links mit lesbarem Anzeige-Text ein — kompatibel mit TinyMCE und anderen RTF-basierten Editoren (z. B. Awesome Support)
+
 ## Jellyfish 2.1.1
 
 ### Bugfixes

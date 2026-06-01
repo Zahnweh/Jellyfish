@@ -316,11 +316,11 @@ class SnippetManager {
 
     // MARK: - Text expansion
 
-    func match(buffer: String) -> (trigger: String, expansion: String)? {
+    func match(buffer: String) -> (trigger: String, expansion: String, rtf: Data?)? {
         let sorted = snippets.sorted { $0.trigger.count > $1.trigger.count }
         for snippet in sorted where !snippet.trigger.isEmpty && buffer.hasSuffix(snippet.trigger) {
             let expanded = DateArithmetic.resolve(in: DatePlaceholder.resolve(in: snippet.expansion))
-            return (snippet.trigger, expanded)
+            return (snippet.trigger, expanded, snippet.expansionRTF)
         }
         return nil
     }

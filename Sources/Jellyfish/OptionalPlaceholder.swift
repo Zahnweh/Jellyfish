@@ -10,6 +10,7 @@ struct OptionalBlock {
     let content: String
     let rawValue: String  // full "{optional:...}content{/optional}"
     let groupBinding: GroupBinding?
+    let defaultEnabled: Bool
 }
 
 struct OptionalPlaceholder {
@@ -34,9 +35,15 @@ struct OptionalPlaceholder {
             let rawValue = String(text[openRange.lowerBound..<closeRange.upperBound])
 
             // Parse optional group binding: "G<id>:<idx1>,<idx2>,...:<label>"
+            // Parse default-off flag: "off:<label>"
             var label = header
             var groupBinding: GroupBinding? = nil
-            if header.hasPrefix("G"), let colonIdx1 = header.firstIndex(of: ":") {
+            var defaultEnabled = true
+
+            if header.hasPrefix("off:") {
+                defaultEnabled = false
+                label = String(header.dropFirst(4))
+            } else if header.hasPrefix("G"), let colonIdx1 = header.firstIndex(of: ":") {
                 let groupPart = String(header[header.index(after: header.startIndex)..<colonIdx1])
                 if let groupId = Int(groupPart) {
                     let rest = String(header[header.index(after: colonIdx1)...])
@@ -50,7 +57,7 @@ struct OptionalPlaceholder {
             }
 
             let effectiveContent = content.isEmpty ? label : content
-            results.append(OptionalBlock(label: label, content: effectiveContent, rawValue: rawValue, groupBinding: groupBinding))
+            results.append(OptionalBlock(label: label, content: effectiveContent, rawValue: rawValue, groupBinding: groupBinding, defaultEnabled: defaultEnabled))
             searchStart = closeRange.upperBound
         }
         return results
