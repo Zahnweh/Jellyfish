@@ -40,6 +40,10 @@ final class SnippetPreviewWindowController: NSObject, NSWindowDelegate {
         updatePreview()
         p.center()
         p.makeKeyAndOrderFront(nil)
+        if let firstPopup = popups.first {
+            if let r = firstPopup as? NSResponder { p.makeFirstResponder(r) }
+            DispatchQueue.main.async { firstPopup.openMenu() }
+        }
     }
 
     // MARK: - Panel construction

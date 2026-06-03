@@ -6,11 +6,13 @@ import AppKit
 protocol DropdownControl: AnyObject {
     var selectedTitle: String { get }
     func selectOption(_ title: String)
+    func openMenu()
 }
 
 extension NSPopUpButton: DropdownControl {
     var selectedTitle: String { selectedItem?.title ?? "" }
     func selectOption(_ title: String) { selectItem(withTitle: title) }
+    func openMenu() { performClick(nil) }
 }
 
 // MARK: - SearchablePopupButton
@@ -47,6 +49,8 @@ final class SearchablePopupButton: NSButton, DropdownControl {
     override func mouseDown(with event: NSEvent) {
         openPicker()
     }
+
+    func openMenu() { openPicker() }
 
     private func openPicker() {
         SearchablePopupButton.activePickerPanel?.close()

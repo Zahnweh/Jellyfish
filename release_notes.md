@@ -1,3 +1,8 @@
+## Jellyfish 2.3
+
+### Verbesserungen
+- **Pulldown-Snippets: Tastatursteuerung**: Das Auswahlmenü öffnet sich beim Erscheinen des Dialogs automatisch — direkt mit Pfeiltasten navigieren und mit Enter bestätigen, ohne die Maus anzufassen
+
 ## Jellyfish 2.2
 
 ### Neu
