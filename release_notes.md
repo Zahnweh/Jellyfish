@@ -1,3 +1,8 @@
+## Jellyfish 2.4
+
+### Neu
+- **Weitere Zeitformate**: Neue Platzhalter für amerikanisches Datum (`{MM/TT/JJJJ}`, `{MM/TT/JJ}`), ISO 8601 komplett (`{JJJJ-MM-TT HH:MM:SS}`), 12h-Format (`{hh:MM AM/PM}`) sowie einzelne Zeitkomponenten (`{HH}`, `{Min}`, `{Sek}`), Kalenderwoche (`{KW}`) und Quartal (`{Q}`)
+
 ## Jellyfish 2.3
 
 ### Verbesserungen
