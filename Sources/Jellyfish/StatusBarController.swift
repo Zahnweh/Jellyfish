@@ -1,14 +1,16 @@
 import Cocoa
 
-// Two-line menu item view: name on top, expansion preview below.
-private final class SnippetResultView: NSView {
-    static let itemWidth: CGFloat = 230
-    static let itemHeight: CGFloat = 42
+// MARK: - Individual result row
+
+private final class SearchResultCellView: NSView {
+    static let height: CGFloat = 44
+
+    var onSelect: (() -> Void)?
 
     private let selectionBg: NSVisualEffectView = {
         let v = NSVisualEffectView()
         v.material = .selection
-        v.state = .active
+        v.state    = .active
         v.isEmphasized = true
         return v
     }()
@@ -16,7 +18,7 @@ private final class SnippetResultView: NSView {
     private let previewLabel = NSTextField(labelWithString: "")
 
     init(snippet: Snippet) {
-        super.init(frame: NSRect(x: 0, y: 0, width: Self.itemWidth, height: Self.itemHeight))
+        super.init(frame: NSRect(x: 0, y: 0, width: SearchPanel.panelWidth, height: Self.height))
 
         let title: String
         if snippet.name.isEmpty {
@@ -26,7 +28,6 @@ private final class SnippetResultView: NSView {
         } else {
             title = snippet.name
         }
-
         let preview = snippet.expansion
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "\n", with: "  ")
@@ -36,90 +37,292 @@ private final class SnippetResultView: NSView {
         selectionBg.isHidden = true
         addSubview(selectionBg)
 
-        titleLabel.stringValue = title
-        titleLabel.font = .systemFont(ofSize: 13)
-        titleLabel.lineBreakMode = .byTruncatingTail
-        titleLabel.frame = NSRect(x: 18, y: 22, width: Self.itemWidth - 26, height: 16)
+        titleLabel.stringValue    = title
+        titleLabel.font           = .systemFont(ofSize: 13)
+        titleLabel.lineBreakMode  = .byTruncatingTail
+        titleLabel.frame          = NSRect(x: 12, y: 24, width: SearchPanel.panelWidth - 24, height: 16)
         addSubview(titleLabel)
 
-        previewLabel.stringValue = preview
-        previewLabel.font = .systemFont(ofSize: 11)
+        previewLabel.stringValue   = preview
+        previewLabel.font          = .systemFont(ofSize: 11)
         previewLabel.lineBreakMode = .byTruncatingTail
-        previewLabel.frame = NSRect(x: 18, y: 5, width: Self.itemWidth - 26, height: 14)
+        previewLabel.frame         = NSRect(x: 12, y: 6, width: SearchPanel.panelWidth - 24, height: 14)
         addSubview(previewLabel)
 
-        applyColors(highlighted: false)
+        setHighlighted(false)
+        addTrackingArea(NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeAlways],
+            owner: self
+        ))
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
-    override func draw(_ dirtyRect: NSRect) {
-        let highlighted = enclosingMenuItem?.isHighlighted == true
-        selectionBg.isHidden = !highlighted
-        applyColors(highlighted: highlighted)
-        super.draw(dirtyRect)
-    }
-
-    private func applyColors(highlighted: Bool) {
-        titleLabel.textColor   = highlighted ? .selectedMenuItemTextColor : .labelColor
-        previewLabel.textColor = highlighted
-            ? .selectedMenuItemTextColor.withAlphaComponent(0.75)
+    func setHighlighted(_ on: Bool) {
+        selectionBg.isHidden = !on
+        titleLabel.textColor   = on ? .selectedMenuItemTextColor : .labelColor
+        previewLabel.textColor = on
+            ? .selectedMenuItemTextColor.withAlphaComponent(0.8)
             : .secondaryLabelColor
     }
 
-    // Custom views don't fire the menu item's action on click automatically.
-    override func mouseUp(with event: NSEvent) {
-        guard let item = enclosingMenuItem,
-              let action = item.action,
-              let target = item.target else { return }
-        NSApp.sendAction(action, to: target, from: item)
+    override func mouseEntered(with event: NSEvent) { setHighlighted(true) }
+    override func mouseExited(with event: NSEvent)  { setHighlighted(false) }
+    override func mouseUp(with event: NSEvent)      { onSelect?() }
+}
+
+// MARK: - Search field (intercepts ↓ ↑ Enter Esc before the text cell sees them)
+
+private final class PanelSearchField: NSSearchField {
+    var onArrowDown: (() -> Void)?
+    var onArrowUp:   (() -> Void)?
+    var onEnter:     (() -> Void)?
+    var onEscape:    (() -> Void)?
+
+    override func keyDown(with event: NSEvent) {
+        switch event.keyCode {
+        case 125: onArrowDown?()           // ↓
+        case 126: onArrowUp?()             // ↑
+        case 36, 76: onEnter?()            // Return / numpad Enter
+        case 53:  onEscape?()              // Esc
+        default:  super.keyDown(with: event)
+        }
     }
 }
 
-// Custom container so the search field gets keyboard focus as soon as the menu opens.
-private final class MenuSearchContainerView: NSView {
-    weak var field: NSSearchField?
+// MARK: - Search Panel
 
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        guard let w = window, let f = field else { return }
-        w.makeFirstResponder(f)
-        // Also async – menu window sometimes isn't key-ready on the first call.
-        DispatchQueue.main.async { [weak w, weak f] in
-            guard let w, let f else { return }
-            w.makeFirstResponder(f)
+// NSPanel with .nonactivatingPanel: clicking the panel does NOT activate Jellyfish,
+// so the previously focused app keeps keyboard focus → paste lands in the right window.
+// canBecomeKey = true gives the search field a standard blue focus ring and cursor.
+final class SearchPanel: NSPanel {
+    static  let panelWidth:   CGFloat = 260
+    private static let fieldH:     CGFloat = 22
+    private static let padV:       CGFloat = 11
+    private static let searchRowH: CGFloat = padV + fieldH + padV   // 44
+    private static let resultRowH: CGFloat = SearchResultCellView.height
+    private static let maxResults           = 8
+
+    var onSelect: ((Snippet) -> Void)?
+
+    private let searchField    = PanelSearchField()
+    private let resultContainer = NSView()
+    private var snippets:       [Snippet] = []
+    private var selectedIndex   = -1
+    private var clickMonitor:   Any?
+
+    // MARK: Init
+
+    init() {
+        super.init(
+            contentRect: NSRect(x: 0, y: 0, width: Self.panelWidth, height: Self.searchRowH),
+            styleMask:   [.borderless, .nonactivatingPanel],
+            backing:     .buffered,
+            defer:       false
+        )
+        level               = .popUpMenu
+        isOpaque            = false
+        backgroundColor     = .clear
+        hasShadow           = true
+        isMovable           = false
+        collectionBehavior  = [.transient, .ignoresCycle]
+        buildContent()
+    }
+
+    override var canBecomeKey: Bool { true }
+
+    // MARK: Content setup
+
+    private func buildContent() {
+        // Root container (rounded corners via layer)
+        let root = NSView(frame: NSRect(x: 0, y: 0, width: Self.panelWidth, height: Self.searchRowH))
+        root.wantsLayer = true
+        root.layer?.cornerRadius = 10
+        root.layer?.masksToBounds = true
+
+        let bg = NSVisualEffectView(frame: root.bounds)
+        bg.material = .menu
+        bg.state    = .active
+        bg.autoresizingMask = [.width, .height]
+        root.addSubview(bg)
+
+        // Result container (empty, filled dynamically)
+        resultContainer.frame = NSRect(x: 0, y: 0, width: Self.panelWidth, height: 0)
+        root.addSubview(resultContainer)
+
+        // Search field
+        searchField.placeholderString = "Snippet suchen…"
+        searchField.frame = NSRect(
+            x: 10, y: Self.padV,
+            width: Self.panelWidth - 20, height: Self.fieldH
+        )
+        searchField.delegate   = self
+        searchField.onArrowDown = { [weak self] in self?.moveSelection(by: +1) }
+        searchField.onArrowUp   = { [weak self] in self?.moveSelection(by: -1) }
+        searchField.onEnter     = { [weak self] in self?.confirmSelection() }
+        searchField.onEscape    = { [weak self] in self?.dismiss() }
+        root.addSubview(searchField)
+
+        contentView = root
+    }
+
+    // MARK: Show / Dismiss
+
+    func show(near button: NSButton) {
+        guard let win = button.window else { return }
+        let btnScreen = win.convertToScreen(button.convert(button.bounds, to: nil))
+
+        searchField.stringValue = ""
+        updateResults(query: "")
+
+        let maxX = (NSScreen.main?.frame.maxX ?? 1920) - Self.panelWidth - 4
+        let x = max(4, min(btnScreen.midX - Self.panelWidth / 2, maxX))
+        setFrameOrigin(NSPoint(x: x, y: btnScreen.minY - Self.searchRowH - 6))
+
+        makeKeyAndOrderFront(nil)
+        makeFirstResponder(searchField)
+
+        clickMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown]
+        ) { [weak self] _ in self?.dismiss() }
+    }
+
+    func dismiss() {
+        if let m = clickMonitor { NSEvent.removeMonitor(m); clickMonitor = nil }
+        orderOut(nil)
+    }
+
+    // MARK: Results
+
+    private func updateResults(query: String) {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        snippets = q.isEmpty ? [] : Array(
+            SnippetManager.shared.snippets.filter {
+                let ql = q.lowercased()
+                return $0.name.lowercased().contains(ql) || $0.expansion.lowercased().contains(ql)
+            }.prefix(Self.maxResults)
+        )
+        selectedIndex = -1
+        rebuildResultViews()
+        resize()
+    }
+
+    private func rebuildResultViews() {
+        resultContainer.subviews.forEach { $0.removeFromSuperview() }
+        for (i, snippet) in snippets.enumerated() {
+            let cell = SearchResultCellView(snippet: snippet)
+            // In AppKit y=0 is at the bottom; first result at top → highest y value.
+            let y = CGFloat(snippets.count - 1 - i) * Self.resultRowH
+            cell.frame = NSRect(x: 0, y: y, width: Self.panelWidth, height: Self.resultRowH)
+            cell.onSelect = { [weak self] in
+                self?.dismiss()
+                self?.onSelect?(snippet)
+            }
+            resultContainer.addSubview(cell)
         }
     }
 
-    // Clicking anywhere in the container focuses the field.
-    override func mouseDown(with event: NSEvent) {
-        if let f = field { window?.makeFirstResponder(f) }
-        super.mouseDown(with: event)
+    private func resize() {
+        let resultH = CGFloat(snippets.count) * Self.resultRowH
+        let sepH: CGFloat = snippets.isEmpty ? 0 : 1
+        let newH = Self.searchRowH + sepH + resultH
+
+        // Anchor the panel's TOP edge to the status bar button: adjust origin as height grows.
+        var pf = frame
+        pf.origin.y   -= (newH - pf.height)
+        pf.size.height = newH
+        setFrame(pf, display: true)
+
+        guard let root = contentView else { return }
+
+        // Update root + background to fill the new window size.
+        root.frame = NSRect(x: 0, y: 0, width: Self.panelWidth, height: newH)
+        root.subviews.first?.frame = root.bounds   // NSVisualEffectView background
+
+        // Search field stays visually at the TOP (high y in AppKit coords).
+        searchField.frame = NSRect(
+            x: 10, y: newH - Self.padV - Self.fieldH,
+            width: Self.panelWidth - 20, height: Self.fieldH
+        )
+
+        // Result container fills everything below the search field.
+        resultContainer.frame = NSRect(x: 0, y: sepH, width: Self.panelWidth, height: resultH)
+
+        // Separator between results and search row.
+        root.layer?.sublayers = root.layer?.sublayers?.filter { $0.name != "sep" }
+        if !snippets.isEmpty {
+            let sep = CALayer()
+            sep.name            = "sep"
+            sep.frame           = CGRect(x: 0, y: resultH, width: Self.panelWidth, height: 1)
+            sep.backgroundColor = NSColor.separatorColor.cgColor
+            root.layer?.addSublayer(sep)
+        }
+    }
+
+    // MARK: Keyboard navigation
+
+    private func moveSelection(by delta: Int) {
+        guard !snippets.isEmpty else { return }
+        let newIndex = max(0, min(snippets.count - 1, selectedIndex + delta))
+        highlightIndex(newIndex)
+    }
+
+    private func highlightIndex(_ index: Int) {
+        // Clear previous
+        resultContainer.subviews.compactMap { $0 as? SearchResultCellView }
+            .forEach { $0.setHighlighted(false) }
+        selectedIndex = index
+        let cell = resultContainer.subviews[snippets.count - 1 - index] as? SearchResultCellView
+        cell?.setHighlighted(true)
+    }
+
+    private func confirmSelection() {
+        guard selectedIndex >= 0, selectedIndex < snippets.count else { return }
+        let snippet = snippets[selectedIndex]
+        dismiss()
+        onSelect?(snippet)
+    }
+
+    override func close() {
+        dismiss()
+        super.close()
     }
 }
 
-class StatusBarController: NSObject {
-    private var statusItem: NSStatusItem!
-    private var menu: NSMenu!
-    private weak var searchField: NSSearchField?
+// MARK: - SearchPanel: NSSearchFieldDelegate
 
-    // The search field item always lives at index 3 (header/open/sep/search).
-    // Results are inserted immediately after it.
-    private let searchItemIndex = 3
-    private var resultItemCount = 0
+extension SearchPanel: NSSearchFieldDelegate {
+    func controlTextDidChange(_ obj: Notification) {
+        guard let f = obj.object as? NSSearchField else { return }
+        updateResults(query: f.stringValue)
+    }
+}
+
+// MARK: - StatusBarController
+
+class StatusBarController: NSObject {
+    private var statusItem:  NSStatusItem!
+    private var menu:        NSMenu!
+    private var searchPanel: SearchPanel!
 
     func setup() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            button.image = menuBarIcon()
+            button.image  = menuBarIcon()
+            button.target = self
+            button.action = #selector(statusBarButtonClicked(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
         buildMenu()
+        searchPanel = SearchPanel()
+        searchPanel.onSelect = { [weak self] snippet in
+            self?.expandSnippet(snippet)
+        }
     }
 
     private func buildMenu() {
         menu = NSMenu()
-        menu.delegate = self
-        resultItemCount = 0
 
         let header = NSMenuItem(title: "Jellyfish — Snippets", action: nil, keyEquivalent: "")
         header.isEnabled = false
@@ -129,13 +332,6 @@ class StatusBarController: NSObject {
         openItem.target = self
         menu.addItem(openItem)
 
-        menu.addItem(.separator())
-
-        let searchItem = makeSearchItem()
-        searchItem.isEnabled = true
-        menu.addItem(searchItem)   // index 3
-
-        // Separator between results (dynamic) and action items below.
         menu.addItem(.separator())
 
         let addItem = NSMenuItem(title: "Snippet hinzufügen…", action: #selector(addSnippet), keyEquivalent: "n")
@@ -156,81 +352,37 @@ class StatusBarController: NSObject {
                                   action: #selector(NSApplication.terminate(_:)),
                                   keyEquivalent: "q")
         menu.addItem(quitItem)
-
-        statusItem.menu = menu
     }
 
-    private func makeSearchItem() -> NSMenuItem {
-        let containerWidth: CGFloat = 230
-        let field = NSSearchField(frame: NSRect(x: 8, y: 4, width: containerWidth - 16, height: 22))
-        field.placeholderString = "Snippet suchen…"
-        field.delegate = self
-
-        let container = MenuSearchContainerView(frame: NSRect(x: 0, y: 0, width: containerWidth, height: 30))
-        container.addSubview(field)
-        container.field = field
-        searchField = field
-
-        let item = NSMenuItem()
-        item.view = container
-        return item
-    }
-
-    // MARK: - Search results
-
-    private func updateResults(for query: String) {
-        let insertionBase = searchItemIndex + 1
-
-        // Remove previous results (always at insertionBase as items shift up after each removal).
-        for _ in 0..<resultItemCount {
-            menu.removeItem(at: insertionBase)
-        }
-        resultItemCount = 0
-
-        let q = query.trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty else { return }
-
-        let ql = q.lowercased()
-        // Search by name and expansion text – the trigger is intentionally excluded
-        // because the search is for when you don't remember (or don't want) the trigger.
-        let matches = SnippetManager.shared.snippets.filter { s in
-            s.name.lowercased().contains(ql) ||
-            s.expansion.lowercased().contains(ql)
-        }.prefix(8)
-
-        if matches.isEmpty {
-            let none = NSMenuItem(title: "Keine Treffer", action: nil, keyEquivalent: "")
-            none.isEnabled = false
-            menu.insertItem(none, at: insertionBase)
-            resultItemCount = 1
+    @objc private func statusBarButtonClicked(_ sender: NSStatusBarButton) {
+        guard let event = NSApp.currentEvent else { return }
+        if event.type == .rightMouseUp {
+            // Temporarily attach the menu so macOS shows it with native status-bar styling.
+            // When statusItem.menu is set, performClick shows the menu (not the action).
+            statusItem.menu = menu
+            sender.performClick(nil)   // blocks until menu is dismissed
+            statusItem.menu = nil      // clear so left-click still opens the panel
         } else {
-            for (i, snippet) in matches.enumerated() {
-                menu.insertItem(makeSnippetMenuItem(snippet), at: insertionBase + i)
+            if searchPanel.isVisible {
+                searchPanel.dismiss()
+            } else {
+                searchPanel.show(near: sender)
             }
-            resultItemCount = matches.count
         }
     }
 
-    private func makeSnippetMenuItem(_ snippet: Snippet) -> NSMenuItem {
-        let item = NSMenuItem(title: "", action: #selector(useSnippet(_:)), keyEquivalent: "")
-        item.target = self
-        item.representedObject = snippet
-        item.view = SnippetResultView(snippet: snippet)
-        return item
-    }
-
-    // Behaves exactly like a keyboard-triggered expansion: dates, clipboard placeholder,
-    // dropdowns, RTF – the full pipeline, just without deleting a trigger first.
-    @objc private func useSnippet(_ sender: NSMenuItem) {
-        guard let snippet = sender.representedObject as? Snippet else { return }
-        menu.cancelTracking()
-        // Give the previously focused app a moment to regain keyboard focus.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+    private func expandSnippet(_ snippet: Snippet) {
+        // .nonactivatingPanel means the previously focused app never lost focus.
+        // A brief delay lets the panel fully close before Cmd+V fires.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
             AppDelegate.shared?.keyboardMonitor.pasteSnippet(snippet)
         }
     }
 
-    func rebuild() { buildMenu() }
+    func rebuild() {
+        searchPanel?.dismiss()
+        buildMenu()
+    }
 
     // MARK: - Menu bar icon
 
@@ -241,15 +393,13 @@ class StatusBarController: NSObject {
         guard let url = Bundle.main.url(forResource: "StatusBarTemplate@2x", withExtension: "png"),
               let source = NSImage(contentsOf: url) else { return fallback }
 
-        let srcW = source.size.width
-        let srcH = source.size.height
+        let srcW  = source.size.width
+        let srcH  = source.size.height
         let scale = targetSize.height / srcH
         let drawW = srcW * scale
         let drawRect = NSRect(
             x: (targetSize.width - drawW) / 2,
-            y: 0,
-            width: drawW,
-            height: targetSize.height
+            y: 0, width: drawW, height: targetSize.height
         )
 
         let icon = NSImage(size: targetSize)
@@ -263,26 +413,8 @@ class StatusBarController: NSObject {
 
     // MARK: - Actions
 
-    @objc private func openApp() { SnippetEditorWindowController.shared.showManageMode() }
-    @objc private func addSnippet() { SnippetEditorWindowController.shared.showAddMode() }
-    @objc private func manageSnippets() { SnippetEditorWindowController.shared.showManageMode() }
+    @objc private func openApp()         { SnippetEditorWindowController.shared.showManageMode() }
+    @objc private func addSnippet()      { SnippetEditorWindowController.shared.showAddMode() }
+    @objc private func manageSnippets()  { SnippetEditorWindowController.shared.showManageMode() }
     @objc private func checkForUpdates() { Updater.checkManually() }
-}
-
-// MARK: - NSMenuDelegate
-
-extension StatusBarController: NSMenuDelegate {
-    func menuWillOpen(_ menu: NSMenu) {
-        searchField?.stringValue = ""
-        updateResults(for: "")
-    }
-}
-
-// MARK: - NSSearchFieldDelegate
-
-extension StatusBarController: NSSearchFieldDelegate {
-    func controlTextDidChange(_ obj: Notification) {
-        guard let field = obj.object as? NSSearchField else { return }
-        updateResults(for: field.stringValue)
-    }
 }
