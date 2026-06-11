@@ -1,3 +1,8 @@
+## Jellyfish 2.5
+
+### Neu
+- **Schnellsuche im Menüleisten-Icon**: Klick auf das Jellyfish-Icon öffnet jetzt direkt ein Suchfeld — Snippet-Name und Inhalt werden live durchsucht, Treffer zeigen eine zweizeilige Vorschau (Name + Textvorschau). Klick auf ein Ergebnis fügt das Snippet ein, genau wie beim Tippen des Kürzels (inkl. Platzhalter, Formatierungen und Datum)
+
 ## Jellyfish 2.4
 
 ### Neu

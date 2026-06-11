@@ -381,6 +381,46 @@ class KeyboardMonitor {
         event.post(tap: .cghidEventTap)
     }
 
+    // Called from StatusBarController when the user picks a snippet from the menu search.
+    // Mirrors the keyboard-expansion pipeline (dates, clipboard, placeholders, RTF) but
+    // skips the deleteTrigger step since no trigger was typed.
+    func pasteSnippet(_ snippet: Snippet) {
+        let clipboardText = NSPasteboard.general.string(forType: .string) ?? ""
+
+        if let rtfData = snippet.expansionRTF,
+           let attrStr = NSAttributedString(rtf: rtfData, documentAttributes: nil) {
+            let mutable = NSMutableAttributedString(attributedString: attrStr)
+            resolveStaticPlaceholders(in: mutable, clipboardText: clipboardText)
+
+            if DropdownPlaceholder.hasPlaceholders(in: mutable.string)
+                || OptionalPlaceholder.hasPlaceholders(in: mutable.string) {
+                let resolvedPlain = snippet.expansion.replacingOccurrences(of: "{ZWISCHENABLAGE}", with: clipboardText)
+                SnippetPreviewWindowController.shared.show(expansion: resolvedPlain, rtfAttrStr: mutable) { [weak self] final, resolvedAttrStr in
+                    if let resolvedAttrStr {
+                        self?.paste(attrStr: resolvedAttrStr, plainFallback: final)
+                    } else {
+                        self?.paste(final)
+                    }
+                }
+            } else {
+                paste(attrStr: mutable, plainFallback: mutable.string)
+            }
+            return
+        }
+
+        // Plain text
+        let dateResolved = DateArithmetic.resolve(in: DatePlaceholder.resolve(in: snippet.expansion))
+        let resolved = dateResolved.replacingOccurrences(of: "{ZWISCHENABLAGE}", with: clipboardText)
+
+        if DropdownPlaceholder.hasPlaceholders(in: resolved) || OptionalPlaceholder.hasPlaceholders(in: resolved) {
+            SnippetPreviewWindowController.shared.show(expansion: resolved) { [weak self] final, _ in
+                self?.paste(final)
+            }
+        } else {
+            paste(resolved)
+        }
+    }
+
     private func showPermissionsAlert() {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
