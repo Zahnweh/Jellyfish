@@ -1,3 +1,8 @@
+## Jellyfish 2.5.1
+
+### Bugfixes
+- **Vorschau: Unterstreichung nach Link-Baustein** – Wenn ein Baustein mit Link (blau, unterstrichen) geöffnet und danach ein anderer Baustein ausgewählt wurde, erschien dessen Text komplett unterstrichen. Ursache war eine Attribut-Vererbung im NSTextStorage; der Editor setzt nun immer explizit saubere Attribute beim Laden eines Bausteins.
+
 ## Jellyfish 2.5
 
 ### Neu

@@ -1195,7 +1195,13 @@ final class SnippetEditorViewController: NSViewController {
     private func applyPlainTextMode() {
         let plain = expansionView.string
         expansionView.isRichText = false
-        expansionView.string = plain
+        let plainAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 13),
+            .foregroundColor: NSColor.labelColor,
+        ]
+        expansionView.textStorage?.setAttributedString(
+            NSAttributedString(string: plain, attributes: plainAttrs)
+        )
         expansionView.font = NSFont.systemFont(ofSize: 13)
         expansionView.textColor = .labelColor
         setFormattingBarVisible(false)
@@ -1283,7 +1289,13 @@ final class SnippetEditorViewController: NSViewController {
             setFormattingBarVisible(true)
         } else {
             expansionView.isRichText = false
-            expansionView.string = snippet.expansion
+            let plainAttrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 13),
+                .foregroundColor: NSColor.labelColor,
+            ]
+            expansionView.textStorage?.setAttributedString(
+                NSAttributedString(string: snippet.expansion, attributes: plainAttrs)
+            )
             expansionView.font = NSFont.systemFont(ofSize: 13)
             expansionView.textColor = .labelColor
             contentTypePopup.selectItem(at: 0)
