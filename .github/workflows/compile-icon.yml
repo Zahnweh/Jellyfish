@@ -50,17 +50,28 @@ jobs:
           echo "--- pbxproj resources/asset references ---"
           grep -i "xcassets\|assetcatalog\|appicon\.icon\|iconcomposer" IconCarrier.xcodeproj/project.pbxproj || echo "(nichts gefunden)"
 
-      - name: Build carrier app with xcodebuild
+      - name: Build carrier app with xcodebuild (retries on known CI flakiness)
         run: |
           set -o pipefail
           mkdir -p build
-          xcodebuild \
-            -project IconCarrier.xcodeproj \
-            -scheme IconCarrier \
-            -configuration Release \
-            -derivedDataPath build/DerivedData \
-            CODE_SIGNING_ALLOWED=NO \
-            build 2>&1 | tee build/xcodebuild-log.txt
+          for attempt in 1 2 3 4 5; do
+            echo "=== Versuch $attempt ==="
+            if xcodebuild \
+              -project IconCarrier.xcodeproj \
+              -scheme IconCarrier \
+              -configuration Release \
+              -derivedDataPath build/DerivedData \
+              CODE_SIGNING_ALLOWED=NO \
+              build 2>&1 | tee "build/xcodebuild-log-attempt$attempt.txt"; then
+              cp "build/xcodebuild-log-attempt$attempt.txt" build/xcodebuild-log.txt
+              exit 0
+            fi
+            echo "Versuch $attempt fehlgeschlagen (bekannte actool/IBPlatformToolFailureException-Flakiness in CI), warte kurz..."
+            sleep 10
+          done
+          cp "build/xcodebuild-log-attempt5.txt" build/xcodebuild-log.txt
+          echo "Alle 5 Versuche fehlgeschlagen."
+          exit 1
 
       - name: Extract compiled icon assets
         continue-on-error: true
@@ -92,4 +103,9 @@ jobs:
             build/output/assetcatalog_generated_info.plist
             build/output/assetcatalog_generated_info.plist_thinned
             build/xcodebuild-log.txt
+            build/xcodebuild-log-attempt1.txt
+            build/xcodebuild-log-attempt2.txt
+            build/xcodebuild-log-attempt3.txt
+            build/xcodebuild-log-attempt4.txt
+            build/xcodebuild-log-attempt5.txt
           if-no-files-found: warn
