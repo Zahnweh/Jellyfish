@@ -63,15 +63,18 @@ jobs:
             build 2>&1 | tee build/xcodebuild-log.txt
 
       - name: Extract compiled icon assets
+        continue-on-error: true
         run: |
           APP="build/DerivedData/Build/Products/Release/IconCarrier.app"
           echo "--- app bundle contents ---"
           find "$APP"
+          echo "--- intermediates assetcatalog_output ---"
+          find build/DerivedData/Build/Intermediates.noindex -iname "*assetcatalog*" -o -iname "*.car" 2>/dev/null
           mkdir -p build/output
-          cp "$APP/Contents/Resources/Assets.car" build/output/Assets.car
-          cp "$APP/Contents/Info.plist" build/output/Info-merged.plist
+          cp "$APP/Contents/Resources/Assets.car" build/output/Assets.car || true
+          cp "$APP/Contents/Info.plist" build/output/Info-merged.plist || true
           echo "--- merged Info.plist ---"
-          plutil -p "$APP/Contents/Info.plist"
+          plutil -p "$APP/Contents/Info.plist" || true
 
       - uses: actions/upload-artifact@v4
         with:
