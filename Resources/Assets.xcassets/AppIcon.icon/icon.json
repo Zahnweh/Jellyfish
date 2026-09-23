@@ -112,6 +112,7 @@
               }
             }
           ],
+          "hidden" : false,
           "image-name" : "2.png",
           "name" : "2",
           "opacity-specializations" : [
