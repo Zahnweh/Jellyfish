@@ -4,7 +4,7 @@ on:
   workflow_dispatch: {}
   push:
     paths:
-      - "Resources/Assets.xcassets/**"
+      - "Resources/AppIcon.icon/**"
       - ".github/workflows/compile-icon.yml"
 
 jobs:
