@@ -24,32 +24,62 @@ jobs:
           xcodebuild -version
           xcrun actool --version
 
-      - name: Compile asset catalog with actool
+      - name: actool help (diagnostics)
+        run: |
+          xcrun actool --help 2>&1 | tee build_help.txt || true
+          mkdir -p build
+          mv build_help.txt build/actool-help.txt
+          echo "--- lines mentioning icon ---"
+          grep -i icon build/actool-help.txt || true
+
+      - name: Compile asset catalog with actool (catalog form)
+        continue-on-error: true
         run: |
           set -o pipefail
-          mkdir -p build/compiled-assets
+          mkdir -p build/compiled-assets-catalog
           xcrun actool \
             --output-format human-readable-text \
             --notices --warnings --errors \
             --platform macosx \
             --minimum-deployment-target 13.0 \
             --app-icon AppIcon \
-            --compile build/compiled-assets \
-            --output-partial-info-plist build/partial-info.plist \
+            --compile build/compiled-assets-catalog \
+            --output-partial-info-plist build/partial-info-catalog.plist \
             Resources/Assets.xcassets \
-            2>&1 | tee build/actool-log.txt
+            2>&1 | tee build/actool-log-catalog.txt
+
+      - name: Compile .icon directly (single-file form)
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          mkdir -p build/compiled-assets-direct
+          xcrun actool \
+            --output-format human-readable-text \
+            --notices --warnings --errors \
+            --platform macosx \
+            --minimum-deployment-target 13.0 \
+            --app-icon AppIcon \
+            --compile build/compiled-assets-direct \
+            --output-partial-info-plist build/partial-info-direct.plist \
+            Resources/Assets.xcassets/AppIcon.icon \
+            2>&1 | tee build/actool-log-direct.txt
 
       - name: Show results
         run: |
-          echo "--- compiled-assets ---"
-          ls -la build/compiled-assets
-          echo "--- partial-info.plist ---"
-          cat build/partial-info.plist
+          echo "--- compiled-assets-catalog ---"
+          ls -la build/compiled-assets-catalog || true
+          echo "--- compiled-assets-direct ---"
+          ls -la build/compiled-assets-direct || true
 
       - uses: actions/upload-artifact@v4
         with:
           name: compiled-app-icon
           path: |
-            build/compiled-assets/Assets.car
-            build/partial-info.plist
-            build/actool-log.txt
+            build/compiled-assets-catalog/Assets.car
+            build/compiled-assets-direct/Assets.car
+            build/partial-info-catalog.plist
+            build/partial-info-direct.plist
+            build/actool-log-catalog.txt
+            build/actool-log-direct.txt
+            build/actool-help.txt
+          if-no-files-found: warn
