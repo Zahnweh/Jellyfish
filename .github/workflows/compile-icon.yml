@@ -13,11 +13,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select newest Xcode
+      - name: Select Xcode version
         run: |
-          LATEST=$(ls -d /Applications/Xcode*.app | sort -V | tail -n1)
-          echo "Using $LATEST"
-          sudo xcode-select -s "$LATEST/Contents/Developer"
+          WANTED="/Applications/Xcode_26.0.app"
+          if [ -d "$WANTED" ]; then
+            SEL="$WANTED"
+          else
+            SEL=$(ls -d /Applications/Xcode*.app | sort -V | tail -n1)
+          fi
+          echo "Using $SEL"
+          sudo xcode-select -s "$SEL/Contents/Developer"
           xcodebuild -version
 
       - name: Generate carrier Xcode project with xcodegen
