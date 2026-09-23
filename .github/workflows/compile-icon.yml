@@ -66,11 +66,18 @@ jobs:
         continue-on-error: true
         run: |
           APP="build/DerivedData/Build/Products/Release/IconCarrier.app"
+          INT="build/DerivedData/Build/Intermediates.noindex/IconCarrier.build/Release/IconCarrier.build"
           echo "--- app bundle contents ---"
           find "$APP"
-          echo "--- intermediates assetcatalog_output ---"
-          find build/DerivedData/Build/Intermediates.noindex -iname "*assetcatalog*" -o -iname "*.car" 2>/dev/null
+          echo "--- FULL assetcatalog_output tree ---"
+          find "$INT/assetcatalog_output" 2>/dev/null
+          echo "--- assetcatalog_generated_info.plist (thinned) ---"
+          plutil -p "$INT/assetcatalog_generated_info.plist_thinned" 2>/dev/null || cat "$INT/assetcatalog_generated_info.plist_thinned" 2>/dev/null
+          echo "--- assetcatalog_generated_info.plist (final) ---"
+          plutil -p "$INT/assetcatalog_generated_info.plist" 2>/dev/null || cat "$INT/assetcatalog_generated_info.plist" 2>/dev/null
           mkdir -p build/output
+          cp "$INT/assetcatalog_generated_info.plist_thinned" build/output/ 2>/dev/null || true
+          cp "$INT/assetcatalog_generated_info.plist" build/output/ 2>/dev/null || true
           cp "$APP/Contents/Resources/Assets.car" build/output/Assets.car || true
           cp "$APP/Contents/Info.plist" build/output/Info-merged.plist || true
           echo "--- merged Info.plist ---"
@@ -82,5 +89,7 @@ jobs:
           path: |
             build/output/Assets.car
             build/output/Info-merged.plist
+            build/output/assetcatalog_generated_info.plist
+            build/output/assetcatalog_generated_info.plist_thinned
             build/xcodebuild-log.txt
           if-no-files-found: warn
