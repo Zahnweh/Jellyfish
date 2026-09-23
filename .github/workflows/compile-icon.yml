@@ -36,7 +36,7 @@ jobs:
               deploymentTarget: "26.0"
               sources:
                 - IconBuildStub
-                - Resources/Assets.xcassets
+                - Resources/AppIcon.icon
               settings:
                 base:
                   PRODUCT_BUNDLE_IDENTIFIER: de.extragroup.iconcarrier
