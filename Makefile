@@ -25,6 +25,7 @@ bundle:
 	cp "$(BUILD_DIR)/$(APP_NAME)" "$(CONTENTS)/MacOS/$(APP_NAME)"
 
 	cp Resources/*.icns "$(CONTENTS)/Resources/"
+	cp Resources/Assets.car "$(CONTENTS)/Resources/"
 	cp "Sources/Jellyfish/StatusBarTemplate@2x.png" "$(CONTENTS)/Resources/"
 	cp "Sources/Jellyfish/snippets.json" "$(CONTENTS)/Resources/"
 	cp "Sources/Jellyfish/icon-clock.svg" "$(CONTENTS)/Resources/"
