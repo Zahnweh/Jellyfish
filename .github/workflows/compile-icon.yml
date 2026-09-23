@@ -1,0 +1,54 @@
+name: Compile App Icon
+
+on:
+  workflow_dispatch: {}
+  push:
+    paths:
+      - "Resources/Assets.xcassets/**"
+      - ".github/workflows/compile-icon.yml"
+
+jobs:
+  compile:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show available Xcode versions
+        run: ls /Applications | grep -i xcode
+
+      - name: Select newest Xcode
+        run: |
+          LATEST=$(ls -d /Applications/Xcode*.app | sort -V | tail -n1)
+          echo "Using $LATEST"
+          sudo xcode-select -s "$LATEST/Contents/Developer"
+          xcodebuild -version
+          xcrun actool --version
+
+      - name: Compile asset catalog with actool
+        run: |
+          mkdir -p build/compiled-assets
+          xcrun actool \
+            --output-format human-readable-text \
+            --notices --warnings --errors \
+            --platform macosx \
+            --minimum-deployment-target 13.0 \
+            --app-icon AppIcon \
+            --compile build/compiled-assets \
+            --output-partial-info-plist build/partial-info.plist \
+            Resources/Assets.xcassets \
+            | tee build/actool-log.txt
+
+      - name: Show results
+        run: |
+          echo "--- compiled-assets ---"
+          ls -la build/compiled-assets
+          echo "--- partial-info.plist ---"
+          cat build/partial-info.plist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compiled-app-icon
+          path: |
+            build/compiled-assets/Assets.car
+            build/partial-info.plist
+            build/actool-log.txt
