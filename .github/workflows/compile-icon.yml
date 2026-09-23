@@ -13,73 +13,71 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Show available Xcode versions
-        run: ls /Applications | grep -i xcode
-
       - name: Select newest Xcode
         run: |
           LATEST=$(ls -d /Applications/Xcode*.app | sort -V | tail -n1)
           echo "Using $LATEST"
           sudo xcode-select -s "$LATEST/Contents/Developer"
           xcodebuild -version
-          xcrun actool --version
 
-      - name: actool help (diagnostics)
+      - name: Generate carrier Xcode project with xcodegen
         run: |
-          xcrun actool --help 2>&1 | tee build_help.txt || true
+          which xcodegen || brew install xcodegen
+          mkdir -p IconBuild/Stub
+          cat > IconBuild/Stub/main.swift <<'EOF'
+          print("icon carrier stub")
+          EOF
+          cat > IconBuild/project.yml <<'EOF'
+          name: IconCarrier
+          targets:
+            IconCarrier:
+              type: application
+              platform: macOS
+              deploymentTarget: "13.0"
+              sources:
+                - Stub
+              resources:
+                - ../Resources/Assets.xcassets
+              settings:
+                base:
+                  PRODUCT_BUNDLE_IDENTIFIER: de.extragroup.iconcarrier
+                  ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+                  CODE_SIGNING_ALLOWED: NO
+                  GENERATE_INFOPLIST_FILE: YES
+                  MARKETING_VERSION: "1.0"
+                  CURRENT_PROJECT_VERSION: "1"
+          EOF
+          cd IconBuild && xcodegen generate
+          find . -maxdepth 3
+
+      - name: Build carrier app with xcodebuild
+        run: |
+          set -o pipefail
           mkdir -p build
-          mv build_help.txt build/actool-help.txt
-          echo "--- lines mentioning icon ---"
-          grep -i icon build/actool-help.txt || true
+          xcodebuild \
+            -project IconBuild/IconCarrier.xcodeproj \
+            -scheme IconCarrier \
+            -configuration Release \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee build/xcodebuild-log.txt
 
-      - name: Compile asset catalog with actool (catalog form)
-        continue-on-error: true
+      - name: Extract compiled icon assets
         run: |
-          set -o pipefail
-          mkdir -p build/compiled-assets-catalog
-          xcrun actool \
-            --output-format human-readable-text \
-            --notices --warnings --errors \
-            --platform macosx \
-            --minimum-deployment-target 13.0 \
-            --app-icon AppIcon \
-            --compile build/compiled-assets-catalog \
-            --output-partial-info-plist build/partial-info-catalog.plist \
-            Resources/Assets.xcassets \
-            2>&1 | tee build/actool-log-catalog.txt
-
-      - name: Compile .icon directly (single-file form)
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          mkdir -p build/compiled-assets-direct
-          xcrun actool \
-            --output-format human-readable-text \
-            --notices --warnings --errors \
-            --platform macosx \
-            --minimum-deployment-target 13.0 \
-            --app-icon AppIcon \
-            --compile build/compiled-assets-direct \
-            --output-partial-info-plist build/partial-info-direct.plist \
-            Resources/Assets.xcassets/AppIcon.icon \
-            2>&1 | tee build/actool-log-direct.txt
-
-      - name: Show results
-        run: |
-          echo "--- compiled-assets-catalog ---"
-          ls -la build/compiled-assets-catalog || true
-          echo "--- compiled-assets-direct ---"
-          ls -la build/compiled-assets-direct || true
+          APP="build/DerivedData/Build/Products/Release/IconCarrier.app"
+          echo "--- app bundle contents ---"
+          find "$APP"
+          mkdir -p build/output
+          cp "$APP/Contents/Resources/Assets.car" build/output/Assets.car
+          cp "$APP/Contents/Info.plist" build/output/Info-merged.plist
+          echo "--- merged Info.plist ---"
+          plutil -p "$APP/Contents/Info.plist"
 
       - uses: actions/upload-artifact@v4
         with:
           name: compiled-app-icon
           path: |
-            build/compiled-assets-catalog/Assets.car
-            build/compiled-assets-direct/Assets.car
-            build/partial-info-catalog.plist
-            build/partial-info-direct.plist
-            build/actool-log-catalog.txt
-            build/actool-log-direct.txt
-            build/actool-help.txt
+            build/output/Assets.car
+            build/output/Info-merged.plist
+            build/xcodebuild-log.txt
           if-no-files-found: warn
