@@ -37,6 +37,7 @@ jobs:
               sources:
                 - IconBuildStub
                 - Resources/Assets.xcassets
+                - Resources/AppIcon.icon
               settings:
                 base:
                   PRODUCT_BUNDLE_IDENTIFIER: de.extragroup.iconcarrier
@@ -48,7 +49,7 @@ jobs:
           EOF
           xcodegen generate
           echo "--- pbxproj resources/asset references ---"
-          grep -i "xcassets\|assetcatalog" IconCarrier.xcodeproj/project.pbxproj || echo "(nichts gefunden)"
+          grep -i "xcassets\|assetcatalog\|appicon\.icon\|iconcomposer" IconCarrier.xcodeproj/project.pbxproj || echo "(nichts gefunden)"
 
       - name: Build carrier app with xcodebuild
         run: |
