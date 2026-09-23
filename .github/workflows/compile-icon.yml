@@ -26,6 +26,7 @@ jobs:
 
       - name: Compile asset catalog with actool
         run: |
+          set -o pipefail
           mkdir -p build/compiled-assets
           xcrun actool \
             --output-format human-readable-text \
@@ -36,7 +37,7 @@ jobs:
             --compile build/compiled-assets \
             --output-partial-info-plist build/partial-info.plist \
             Resources/Assets.xcassets \
-            | tee build/actool-log.txt
+            2>&1 | tee build/actool-log.txt
 
       - name: Show results
         run: |
