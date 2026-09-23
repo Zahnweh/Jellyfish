@@ -1,0 +1,116 @@
+name: Compile App Icon
+
+on:
+  workflow_dispatch: {}
+  push:
+    paths:
+      - "Resources/AppIcon.icon/**"
+      - ".github/workflows/compile-icon.yml"
+
+jobs:
+  compile:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode version
+        run: |
+          WANTED="/Applications/Xcode_26.0.app"
+          if [ -d "$WANTED" ]; then
+            SEL="$WANTED"
+          else
+            SEL=$(ls -d /Applications/Xcode*.app | sort -V | tail -n1)
+          fi
+          echo "Using $SEL"
+          sudo xcode-select -s "$SEL/Contents/Developer"
+          xcodebuild -version
+
+      - name: Generate carrier Xcode project with xcodegen
+        run: |
+          which xcodegen || brew install xcodegen
+          mkdir -p IconBuildStub
+          cat > IconBuildStub/main.swift <<'EOF'
+          print("icon carrier stub")
+          EOF
+          cat > project.yml <<'EOF'
+          name: IconCarrier
+          targets:
+            IconCarrier:
+              type: application
+              platform: macOS
+              deploymentTarget: "26.0"
+              sources:
+                - IconBuildStub
+                - Resources/AppIcon.icon
+              settings:
+                base:
+                  PRODUCT_BUNDLE_IDENTIFIER: de.extragroup.iconcarrier
+                  ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+                  CODE_SIGNING_ALLOWED: NO
+                  GENERATE_INFOPLIST_FILE: YES
+                  MARKETING_VERSION: "1.0"
+                  CURRENT_PROJECT_VERSION: "1"
+          EOF
+          xcodegen generate
+          echo "--- pbxproj resources/asset references ---"
+          grep -i "xcassets\|assetcatalog\|appicon\.icon\|iconcomposer" IconCarrier.xcodeproj/project.pbxproj || echo "(nichts gefunden)"
+
+      - name: Build carrier app with xcodebuild (retries on known CI flakiness)
+        run: |
+          set -o pipefail
+          mkdir -p build
+          for attempt in 1 2 3 4 5; do
+            echo "=== Versuch $attempt ==="
+            if xcodebuild \
+              -project IconCarrier.xcodeproj \
+              -scheme IconCarrier \
+              -configuration Release \
+              -derivedDataPath build/DerivedData \
+              CODE_SIGNING_ALLOWED=NO \
+              build 2>&1 | tee "build/xcodebuild-log-attempt$attempt.txt"; then
+              cp "build/xcodebuild-log-attempt$attempt.txt" build/xcodebuild-log.txt
+              exit 0
+            fi
+            echo "Versuch $attempt fehlgeschlagen (bekannte actool/IBPlatformToolFailureException-Flakiness in CI), warte kurz..."
+            sleep 10
+          done
+          cp "build/xcodebuild-log-attempt5.txt" build/xcodebuild-log.txt
+          echo "Alle 5 Versuche fehlgeschlagen."
+          exit 1
+
+      - name: Extract compiled icon assets
+        continue-on-error: true
+        run: |
+          APP="build/DerivedData/Build/Products/Release/IconCarrier.app"
+          INT="build/DerivedData/Build/Intermediates.noindex/IconCarrier.build/Release/IconCarrier.build"
+          echo "--- app bundle contents ---"
+          find "$APP"
+          echo "--- FULL assetcatalog_output tree ---"
+          find "$INT/assetcatalog_output" 2>/dev/null
+          echo "--- assetcatalog_generated_info.plist (thinned) ---"
+          plutil -p "$INT/assetcatalog_generated_info.plist_thinned" 2>/dev/null || cat "$INT/assetcatalog_generated_info.plist_thinned" 2>/dev/null
+          echo "--- assetcatalog_generated_info.plist (final) ---"
+          plutil -p "$INT/assetcatalog_generated_info.plist" 2>/dev/null || cat "$INT/assetcatalog_generated_info.plist" 2>/dev/null
+          mkdir -p build/output
+          cp "$INT/assetcatalog_generated_info.plist_thinned" build/output/ 2>/dev/null || true
+          cp "$INT/assetcatalog_generated_info.plist" build/output/ 2>/dev/null || true
+          cp "$APP/Contents/Resources/Assets.car" build/output/Assets.car || true
+          cp "$APP/Contents/Info.plist" build/output/Info-merged.plist || true
+          echo "--- merged Info.plist ---"
+          plutil -p "$APP/Contents/Info.plist" || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compiled-app-icon
+          path: |
+            build/output/Assets.car
+            build/output/Info-merged.plist
+            build/output/assetcatalog_generated_info.plist
+            build/output/assetcatalog_generated_info.plist_thinned
+            build/xcodebuild-log.txt
+            build/xcodebuild-log-attempt1.txt
+            build/xcodebuild-log-attempt2.txt
+            build/xcodebuild-log-attempt3.txt
+            build/xcodebuild-log-attempt4.txt
+            build/xcodebuild-log-attempt5.txt
+          if-no-files-found: warn

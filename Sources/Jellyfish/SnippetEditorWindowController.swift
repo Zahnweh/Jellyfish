@@ -1473,7 +1473,6 @@ class SnippetEditorWindowController: NSObject, NSWindowDelegate {
         window?.makeKeyAndOrderFront(nil)
         applyFirstLaunchSizeIfNeeded()
         NSApp.setActivationPolicy(.regular)
-        AppIconManager.shared.update()
         NSApp.activate(ignoringOtherApps: true)
     }
 
