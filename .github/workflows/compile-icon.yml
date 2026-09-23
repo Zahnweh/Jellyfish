@@ -36,7 +36,6 @@ jobs:
               deploymentTarget: "13.0"
               sources:
                 - IconBuildStub
-              resources:
                 - Resources/Assets.xcassets
               settings:
                 base:
