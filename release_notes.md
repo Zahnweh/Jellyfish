@@ -1,3 +1,8 @@
+## Jellyfish 2.5.2
+
+### Verbesserungen
+- **Automatisches App-Icon je nach Erscheinungsbild**: Das Jellyfish-Icon passt sich in Finder, Dock, Launchpad und Spotlight jetzt selbstständig an Hell/Dunkel sowie an „Eingefärbt"/„Klar" (macOS 26) an — ganz ohne dass die App laufen muss. Der bisherige Laufzeit-Workaround wurde entfernt
+
 ## Jellyfish 2.5.1
 
 ### Bugfixes
