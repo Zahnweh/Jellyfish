@@ -1,10 +1,13 @@
 APP_NAME     := Jellyfish
-APP_VERSION  := 2.5.2
-BUILD_NUMBER := 16
+APP_VERSION  := 2.5.3
+BUILD_NUMBER := 17
 BUNDLE_ID    := de.extragroup.jellyfish
 ARCH         := $(shell uname -m)
 BUILD_DIR    := .build/$(ARCH)-apple-macosx/release
-APP_BUNDLE   := build/$(APP_NAME).app
+# Bundle außerhalb des (File-Provider-synchronisierten) Projektordners bauen,
+# sonst scheitert codesign an com.apple.fileprovider-Attributen.
+STAGE_DIR    := $(or $(TMPDIR),/tmp)/jellyfish-build
+APP_BUNDLE   := $(STAGE_DIR)/$(APP_NAME).app
 CONTENTS     := $(APP_BUNDLE)/Contents
 DMG_NAME     := build/$(APP_NAME)-$(APP_VERSION).dmg
 
@@ -20,12 +23,14 @@ release:
 # ── Bundle ─────────────────────────────────────────────────────────────────────
 bundle:
 	@rm -rf "$(APP_BUNDLE)"
+	@mkdir -p build
 	@mkdir -p "$(CONTENTS)/MacOS" "$(CONTENTS)/Resources"
 
 	cp "$(BUILD_DIR)/$(APP_NAME)" "$(CONTENTS)/MacOS/$(APP_NAME)"
 
-	cp Resources/*.icns "$(CONTENTS)/Resources/"
-	cp Resources/Assets.car "$(CONTENTS)/Resources/"
+	xcrun actool Resources/AppIcon.icon --compile "$(CONTENTS)/Resources" \
+		--platform macosx --minimum-deployment-target 26.0 --app-icon AppIcon \
+		--output-partial-info-plist /dev/null >/dev/null
 	cp "Sources/Jellyfish/StatusBarTemplate@2x.png" "$(CONTENTS)/Resources/"
 	cp "Sources/Jellyfish/snippets.json" "$(CONTENTS)/Resources/"
 	cp "Sources/Jellyfish/icon-clock.svg" "$(CONTENTS)/Resources/"

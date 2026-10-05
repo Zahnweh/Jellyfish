@@ -1,3 +1,9 @@
+## Jellyfish 2.5.3
+
+### Verbesserungen
+- **Neues App-Icon-Design** mit überarbeiteten Hell/Dunkel-/Eingefärbt-Varianten, die macOS automatisch passend zur Systemeinstellung wählt
+- Das Icon wird jetzt direkt aus dem Icon-Composer-Quellmaterial kompiliert; vorkompilierte Dateien und Workarounds entfallen
+
 ## Jellyfish 2.5.2
 
 ### Verbesserungen

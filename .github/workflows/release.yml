@@ -46,8 +46,9 @@ jobs:
 
           cp "$BUILD_DIR/Jellyfish" "$CONTENTS/MacOS/Jellyfish"
 
-          cp Resources/*.icns "$CONTENTS/Resources/"
-          cp Resources/Assets.car "$CONTENTS/Resources/"
+          xcrun actool Resources/AppIcon.icon --compile "$CONTENTS/Resources" \
+            --platform macosx --minimum-deployment-target 26.0 --app-icon AppIcon \
+            --output-partial-info-plist /dev/null > /dev/null
           cp Sources/Jellyfish/StatusBarTemplate@2x.png "$CONTENTS/Resources/"
           cp Sources/Jellyfish/snippets.json "$CONTENTS/Resources/"
           cp Sources/Jellyfish/icon-clock.svg "$CONTENTS/Resources/"
