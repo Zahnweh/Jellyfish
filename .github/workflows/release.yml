@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-and-release:
-    runs-on: macos-15
+    runs-on: macos-26
     permissions:
       contents: write
 
@@ -48,11 +48,11 @@ jobs:
 
           xcrun actool Resources/AppIcon.icon --compile "$CONTENTS/Resources" \
             --platform macosx --minimum-deployment-target 26.0 --app-icon AppIcon \
-            --output-partial-info-plist /dev/null > /dev/null
+            --output-partial-info-plist /dev/null
+          test -f "$CONTENTS/Resources/Assets.car" || { echo "::error::actool hat kein Assets.car erzeugt"; exit 1; }
           cp Sources/Jellyfish/StatusBarTemplate@2x.png "$CONTENTS/Resources/"
           cp Sources/Jellyfish/snippets.json "$CONTENTS/Resources/"
-          cp Sources/Jellyfish/icon-clock.svg "$CONTENTS/Resources/"
-          cp Sources/Jellyfish/icon-dropdown.svg "$CONTENTS/Resources/"
+          cp Sources/Jellyfish/icon-*.svg "$CONTENTS/Resources/"
 
           sed \
             -e "s/\$(APP_VERSION)/${{ steps.version.outputs.VERSION }}/g" \

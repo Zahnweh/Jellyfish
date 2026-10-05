@@ -1,3 +1,9 @@
+## Jellyfish 2.5.4
+
+### Bugfixes
+- **App-Icon im Release**: Das Icon fehlte im Download von 2.5.3 (Standard-Icon). Der Release-Build kompiliert das Icon jetzt zuverlässig und bricht ab, falls es fehlt
+- Alle Baustein-Symbole (Kalender, Zwischenablage, Rechner, optionaler Block, Bedingung) sind jetzt auch im Release-Build enthalten
+
 ## Jellyfish 2.5.3
 
 ### Verbesserungen
